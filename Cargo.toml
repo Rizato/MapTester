@@ -1,0 +1,4 @@
+[package]
+name = "moba"
+version = "0.1.0"
+authors = ["Rizato <rizatodev@gmail.com>"]
