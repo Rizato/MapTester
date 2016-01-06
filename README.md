@@ -1,6 +1,6 @@
 # MOBA
 
-This is an MOBA built to work with an existing game client. 
+This is a MOBA built to work with an existing game client. 
 
 Check out the [wyvernrpg subreddit](https://reddit.com/r/wyvernrpg) for info about the original game. 
 
