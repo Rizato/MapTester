@@ -46,91 +46,214 @@ fn main() {
 //This reflects the structure of the network API.
 #[derive(Clone)]
 struct GameMap {
-	//This
-	terrain: Vec<MapTerrain>,
-	//Items includes teleports, loot, traps, gold, etc
-	items: Vec<MapItem>,
-	//This is any players in the map
-	users: Vec<MapUser>,
-	//All monsters and other npcs
-	npcs: Vec<MapNpc>,
+    width: usize,
+    height: usize,
+    tiles: Arc<RwLock<Vec<MapTile>>>,
+    //TODO This is temporary
+    start_x: usize,
+    start_y: usize, 
+
 }
 
 impl GameMap {
 	fn new(mapname: &str) -> Result<GameMap, &str> {
-        //TODO Load map from file.
+        //TODO Load map from file use ProtocolBuffers.
+        let mut tiles: Vec<MapTile> = vec![];
+        //Just doing a fake thing really quick.
+        for _ in 0..100 {
+            tiles.push(MapTile::new("terrain/aspens".to_string()));
+        }
+        for _ in 0..100 {
+            tiles.push(MapTile::new("terrain/beach".to_string()));
+        }
+        for _ in 0..100 {
+            tiles.push(MapTile::new("terrain/blue_tile".to_string()));
+        }
+        for _ in 0..100 {
+            tiles.push(MapTile::new("terrain/brick1".to_string()));
+        }
+        for _ in 0..100 {
+            tiles.push(MapTile::new("terrain/brick2".to_string()));
+        }
+        for _ in 0..100 {
+            tiles.push(MapTile::new("terrain/brick3".to_string()));
+        }
+        for _ in 0..100 {
+            tiles.push(MapTile::new("terrain/brick4".to_string()));
+        }
+        for _ in 0..100 {
+            tiles.push(MapTile::new("terrain/carpet1".to_string()));
+        }
+        for _ in 0..100 {
+            tiles.push(MapTile::new("terrain/carpet2".to_string()));
+        }
+        let mut ti = Arc::new(RwLock::new(tiles));
 		let map = GameMap {
-			terrain: vec![],
-			items: vec![],
-			users: vec![],
-			npcs: vec![],
+            width: 30,
+            height: 30,
+            start_x: 15,
+            start_y: 8,
+            //Coordinates in tiles will simulate a 2d matrix, while actually being a 1d array.
+            // Everything will be found by multiplying the width * y + x
+            //   0  1  2  3  4  5  6  7
+            // 0 0  1  2  3  4  5  6  7
+            // 1 8  9  10 11 12 13 14 15
+			tiles: ti.clone(), 
 		};
 		Ok(map)
 	}
 
-	fn execute(&self, command: String) -> &str {
-        println!("{}",command);
-		"Command executed "
+    fn get_user(&self, index: usize) -> MapTile {
+        let mut tiles = self.tiles.read().unwrap();
+        tiles[index].clone()
+    }
+
+    fn move_user(&mut self, o:usize, n:usize) {
+        //println!("{}", n);
+        let old = self.get_user(o); 
+        let mut tiles = self.tiles.write().unwrap();
+        let ref mut new = tiles[n];
+        new.user = old.user.clone();
+    }
+
+    fn wipe_user(&mut self, o: usize) {
+        let mut tiles = self.tiles.write().unwrap();
+        let ref mut old = tiles[o];
+        old.user = None;
+    }
+
+	fn execute(&mut self, token: mio::Token, command: String) -> Option<String> {
+        let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
+        if command.starts_with("mouse") {
+            println!("Mouse not yet implemented");
+        } 
+        match command.trim() {
+            "a" => {
+                if x > 0 {
+                    let o = y*self.width +x;
+                    let n = y*self.width + x-1;
+                    println!("{} {}", x-1, y);
+                    self.move_user(o, n);
+                    self.wipe_user(o);
+                }
+                    None
+            },
+            "d" => {
+                if x < self.width-1 {
+                    let o = y*self.width +x;
+                    let n = y*self.width + x+1;
+                    println!("{} {}", x+1, y);
+                    self.move_user(o, n);
+                    self.wipe_user(o);
+                }
+                    None
+            },
+            "s" => {
+                if y < self.height-1 {
+                    let o = y*self.width +x;
+                    let n = (y+1)*self.width + x;
+                    println!("{} {}", x, y+1);
+                    self.move_user(o, n);
+                    self.wipe_user(o);
+                }
+                    None
+            },
+            "w" => {
+                if y > 0 {
+                    let o = y*self.width +x;
+                    let n = (y-1)*self.width + x;
+                    println!("{} {}", x, y+1);
+                    self.move_user(o, n);
+                    self.wipe_user(o);
+                }
+                    None
+            },
+            _ => {
+                Some("Bad Command".to_string())
+            }
+        }
 	}
+
+    fn find_tile_with_token(&self, token: mio::Token) -> Option<(usize, usize)> {
+        let tiles = self.tiles.read().unwrap();
+        let len = tiles.len();
+        for t in 0..len {
+            match tiles[t].user {
+                Some(ref p) => {
+                    if p.token == token {
+                       let y = (t) / self.width;
+                       let x = (t) % self.width;
+                       return Some((x, y));
+                    }
+                },
+                None => {},
+            }
+        }
+        None
+    }
 	
 	fn execute_all(&self) {
 		println!("Executed");
 	}
 	
-	fn send_portion(&self) -> MapScreen {
+	fn send_portion(&self, token: mio::Token) -> MapScreen {
 		//This sends the squares around the user, which will always be centered in the screen.
-		MapScreen::new()
+        let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
+		MapScreen::new(self, x, y)
 	}
+
+    fn add_player(&mut self, token: mio::Token, player: Arc<Player>) {
+        //TODO Add match start.user None/Some & determine whether to add in a different location
+        let mut tiles = self.tiles.write().unwrap();
+        let ref mut start = tiles[(self.start_y * self.width + self.start_x) as usize];
+        start.user = Some(MapUser::new(token.clone(), player.clone()));
+    }
 }
 
 #[derive(Clone)]
-struct MapTerrain {
+struct MapTile{
 	//No position, because position is determined by the position in vector
 	tile: String,
+    user: Option<MapUser>,
+    //TODO add a Vec<MapItem>
 }
 
-impl MapTerrain {
-	fn new(tile: String) -> MapTerrain {
-		MapTerrain{
+impl MapTile {
+	fn new(tile: String) -> MapTile {
+		MapTile{
 			tile: tile,
+            user: None,
 		}
 	}
 }
 
 #[derive(Clone)]
-struct MapItem {
-	//item: Item,
-	tile: i16,
-	x: u8,
-	y: u8,
-}
-
-#[derive(Clone)]
 struct MapUser{
-	//player: Player,
-	tile: i16,
-	x: u8,
-	y: u8,
-}
-
-#[derive(Clone)]
-struct MapNpc{
-	//npc: Npc,
-	tile: i16,
-	x: u8,
-	y: u8,
-}
-
-#[derive(Clone)]
-struct MapObject {
+	player: Arc<Player>,
 	tile: String,
-	x: u8,
-	y: u8,
+    token: mio::Token,
 }
 
-impl MapObject {
-	fn new(tile: String, x: u8, y:u8) -> MapObject{
-		MapObject{
+impl MapUser {
+    fn new(token: mio::Token, player: Arc<Player>) -> MapUser {
+       MapUser {
+            token: token, 
+            player: player.clone(),
+            tile: player.tile.clone(),
+       }
+    }
+}
+
+#[derive(Clone)]
+struct ScreenObject {
+    tile: String,
+    x: u8,
+    y: u8,
+}
+
+impl ScreenObject {
+	fn new(tile: String, x: u8, y:u8) -> ScreenObject{
+		ScreenObject{
 			tile: tile,
 			x: x,
 			y: y,
@@ -138,21 +261,57 @@ impl MapObject {
 	}
 }
 
+#[derive(Clone)]
+struct ScreenTerrain {
+    tile: String,
+}
+
+impl ScreenTerrain {
+    fn new(tile: String) -> ScreenTerrain {
+        ScreenTerrain {
+            tile: tile,
+        }
+    }
+}
 
 #[derive(Clone)]
 struct MapScreen {
 	//15x15 vector. 
-	terrain: Vec<MapTerrain>,
+	terrain: Vec<ScreenTerrain>,
 	//User art at 7,7
-	objects: Vec<MapObject>,
+	objects: Vec<ScreenObject>,
 }
 
 impl MapScreen {
-	fn new() -> MapScreen {
-		let ter = vec![MapTerrain::new("terrain/wood_floor".to_string()); 225];
+	fn new(map: &GameMap, x: usize, y: usize) -> MapScreen {
+        let startx: isize = x as isize -7;
+        let starty: isize = y as isize -7;
+		let mut ter = vec![];
 		let mut obj = vec![];
-		obj.push(MapObject::new("players/wizard.S".to_string(), 7, 7));
-		obj.push(MapObject::new("wiz/binyamin/art/greatshoggoth.E".to_string(), 3, 4));
+        //If coords are valid we will actually draw something
+        let empty = ScreenTerrain::new("terrain/empty".to_string());
+        if map.width > x && map.height > y {
+            for i in 0..15{
+                for j in 0..15{
+                    if startx+i >= 0 && startx+(i as isize) < (map.width as isize) && starty+(j as isize) >=0 && starty+(j as isize) < (map.height as isize) {
+                        let index= ((starty +j) * (map.width as isize)+ (startx+i)) as usize;
+                        let tiles = map.tiles.read().unwrap();
+                        let tile = tiles[index].clone();
+                        ter.push(ScreenTerrain::new(tile.tile.clone()));
+                        match tile.user {
+                            Some(u) => {
+                                println!("{} {} {} {}", startx, i, starty, j);
+                                obj.push(ScreenObject::new(u.tile, (i-1) as u8, (j-1) as u8));
+                                println!("{} {}", index, tile.tile.clone());
+                            },
+                            None => {},
+                        }
+                    } else {
+                        ter.push(empty.clone());
+                    }
+                }
+            }
+        }
 		MapScreen {
 			terrain: ter,
 			objects:obj,
@@ -162,7 +321,7 @@ impl MapScreen {
 
 struct GameLoop {
 	//Map with all items & tiles
-	game_map: Arc<GameMap>,
+	game_map: Arc<RwLock<GameMap>>,
     connections: Arc<RwLock<Vec<mio::Token>>>, 
     send: mio::Sender<Msg>,
 }
@@ -170,7 +329,7 @@ struct GameLoop {
 impl GameLoop {
 	fn new(mapname : &str, send: mio::Sender<Msg>) -> GameLoop {
 		GameLoop {
-			game_map: Arc::new(GameMap::new(mapname).unwrap()),
+			game_map: Arc::new(RwLock::new(GameMap::new(mapname).unwrap())),
 			connections: Arc::new(RwLock::new(vec![])),
             send: send,
 		}
@@ -185,7 +344,7 @@ impl GameLoop {
            let (send, recv) = channel(); 
            loop {
                let mut threads = vec![];
-               thread::sleep(Duration::from_millis(1000));
+               thread::sleep(Duration::from_millis(20));
                //let screen_out = screen.clone();
                //to_mio.send(Msg::Screen(mio::Token(1), screen_out));
                let mutex = connections.read().unwrap();
@@ -214,16 +373,21 @@ impl GameLoop {
                        }
                    }
                }
+               let mut map = game_map.write().unwrap();
                for (token, comm) in commands {
-                    let response =  game_map.execute(comm);
-                    //send command execution response (Use this to send item/health updates from recoil)
-                    let _ = to_mio.send(Msg::TextOutput(token, 2, response.to_string()));
+                    match map.execute(token, comm) {
+                        Some(response) => {
+                            //send command execution response (Use this to send item/health updates from recoil)
+                            let _ = to_mio.send(Msg::TextOutput(token, 2, response));
+                        },
+                        _ => {},
+                    }
                }
-               game_map.execute_all();
+               map.execute_all();
                //send map & health updates
                //his map should be based on the player position normally.
-               let screen = game_map.send_portion();
                for conn in mutex.iter() {
+                   let screen = map.send_portion(conn.clone());
                    //Need to see response from sender
                    match to_mio.send(Msg::Screen(conn.clone(), screen.clone())) {
                         Err(mio::NotifyError::Io(_)) => {
@@ -243,8 +407,10 @@ impl GameLoop {
         });
 	}
     
-    fn join(&mut self, token: mio::Token) {
-        self.connections.write().unwrap().push(token);
+    fn join(&mut self, token: mio::Token, player: Arc<Player>) {
+        let mut conn = self.connections.write().unwrap();
+        self.game_map.write().unwrap().add_player(token.clone(), player);
+        conn.push(token);
     }
 }
 
@@ -378,6 +544,8 @@ enum Msg {
 }
 
 struct Player{
+    id: i64,
+    tile: String,
 	hp: i32,
 	max_hp: i32,
 	name: String,
@@ -386,6 +554,8 @@ struct Player{
 impl Player {
 	fn new() -> Player {
 		Player {
+            id: 0,
+            tile: "players/fire_giant.S".to_string(),
 			hp: 0,
 			max_hp: 0,
 			name: "empty".to_string(), 
@@ -396,7 +566,7 @@ impl Player {
 struct Connection {
     games: Arc<RefCell<Game>>,
 	socket: TcpStream,
-    player: Player,
+    player: Arc<Player>,
 	token: mio::Token,
 	to_client_queue: Vec<ByteBuf>,
 	from_client_queue: Vec<String>,
@@ -406,7 +576,7 @@ struct Connection {
 
 impl Connection{
 	fn new(games: Arc<RefCell<Game>>, socket: TcpStream, token: mio::Token) -> Connection {
-        let play = Player::new();
+        let play = Arc::new(Player::new());
 		Connection {
             games: games,
 			socket: socket,
@@ -470,22 +640,21 @@ impl Connection{
 				self.reregister_readable(event_loop);
 			},
 			Ok(Some(mut n)) => {
-                println!("Read {}", n);
+                //println!("Read {}", n);
 				//Read strings. Write to game_loop
 				loop {
-					if n > 3 {
+					if n >= 3 {
 						//Must be over 3 in length. 
 						let length_slice = &read[..2];
 						let length = length_slice.iter().fold(0usize,| total, x | total  << 8 | *x as
                                                              usize);
 						if n >= 2+ length {
-							let command = std::str::from_utf8(&read[2..length]).unwrap();
+							let command = std::str::from_utf8(&read[2..2+length]).unwrap();
                             if command.starts_with("#tile") {
                                 let tile: i16 = command.split(" ").next().unwrap().parse().unwrap();
                                 self.write_tile(tile);
                             } else {
 							    self.from_client_queue.push(command.to_string());
-                                println!("Connection: {}", command);
                             }
 							n = n - (2 + length);
 						}
@@ -512,7 +681,7 @@ impl Connection{
 				    self.to_client_queue.push(buf);
 					self.event_set.insert(mio::EventSet::writable());
                 }
-				println!("Wrote {} bytes", n);
+				//println!("Wrote {} bytes", n);
 				if self.to_client_queue.len() >  0 {
 					self.event_set.insert(mio::EventSet::writable());
 				}
@@ -582,7 +751,7 @@ impl Connection{
                         self.reregister_writable(event_loop);
                         println!("Writable");
                         let game_loop = self.games.borrow_mut().get_or_create_game_loop("map", event_loop);
-			            game_loop.borrow_mut().join(self.token.clone());
+			            game_loop.borrow_mut().join(self.token.clone(), self.player.clone());
                         println!("Looped");
 			            //This is here only while it is a single user. Normally, these would be added to the game_loop, not set.
 						self.reregister_readable(event_loop);
@@ -758,7 +927,7 @@ impl WyvernApi for Connection {
         Connection::write_i16(&mut buf, tile);
         Connection::write_string(&mut buf, &path);
         Connection::write_timestamp(&mut buf);
-        //self.to_client_queue.insert(0, ByteBuf::from_slice(&buf[..]));
+        self.to_client_queue.insert(0, ByteBuf::from_slice(&buf[..]));
     }
 	
 	fn write_text_out(&mut self, style: u8, message: &str) {
@@ -782,6 +951,7 @@ impl WyvernApi for Connection {
 			uncompressed.push(object.x);
 			uncompressed.push(object.y);
             let tile = self.games.borrow_mut().mappings.get(&object.tile).unwrap().clone();
+            //println!("{} {} {}", object.x, object.y, tile);
             Connection::write_i16_reversed(&mut uncompressed, tile.clone());
 		}
 		let u_len = uncompressed.len();
