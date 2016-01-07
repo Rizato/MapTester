@@ -132,7 +132,7 @@ impl GameMap {
                 if x > 0 {
                     let o = y*self.width +x;
                     let n = y*self.width + x-1;
-                    println!("{} {}", x-1, y);
+                    //println!("{} {}", x-1, y);
                     self.move_user(o, n);
                     self.wipe_user(o);
                 }
@@ -142,7 +142,7 @@ impl GameMap {
                 if x < self.width-1 {
                     let o = y*self.width +x;
                     let n = y*self.width + x+1;
-                    println!("{} {}", x+1, y);
+                    //println!("{} {}", x+1, y);
                     self.move_user(o, n);
                     self.wipe_user(o);
                 }
@@ -152,7 +152,7 @@ impl GameMap {
                 if y < self.height-1 {
                     let o = y*self.width +x;
                     let n = (y+1)*self.width + x;
-                    println!("{} {}", x, y+1);
+                    //println!("{} {}", x, y+1);
                     self.move_user(o, n);
                     self.wipe_user(o);
                 }
@@ -162,7 +162,7 @@ impl GameMap {
                 if y > 0 {
                     let o = y*self.width +x;
                     let n = (y-1)*self.width + x;
-                    println!("{} {}", x, y+1);
+                    //println!("{} {}", x, y+1);
                     self.move_user(o, n);
                     self.wipe_user(o);
                 }
@@ -193,7 +193,7 @@ impl GameMap {
     }
 	
 	fn execute_all(&self) {
-		println!("Executed");
+		//println!("Executed");
 	}
 	
 	fn send_portion(&self, token: mio::Token) -> MapScreen {
@@ -300,9 +300,7 @@ impl MapScreen {
                         ter.push(ScreenTerrain::new(tile.tile.clone()));
                         match tile.user {
                             Some(u) => {
-                                println!("{} {} {} {}", startx, i, starty, j);
                                 obj.push(ScreenObject::new(u.tile, (i-1) as u8, (j-1) as u8));
-                                println!("{} {}", index, tile.tile.clone());
                             },
                             None => {},
                         }
@@ -364,11 +362,11 @@ impl GameLoop {
                'outer: loop {
                    match recv.try_recv() {
                        Ok(Msg::Command(token, command)) => {
-                           println!("{}", command);
+                           //println!("{}", command);
                            &commands.push((token, command)); 
                        },
                        _ => {
-                           println!("Nothin.");
+                           //println!("Nothin.");
                            break 'outer; 
                        }
                    }
@@ -443,10 +441,9 @@ impl Game {
 		//Checks the hashmap for the Gameloop. If not there, it creates a new one, adds it and returns it.
         let send = event_loop.channel();
         let _ = send.send(Msg::TextOutput(mio::Token(1), 2, "test".to_string()));
-        let game_loop = Arc::new(RefCell::new(GameLoop::new(map_name, send)));
+        let game_loop = self.game_loops.entry(map_name.to_string()).or_insert(Arc::new(RefCell::new(GameLoop::new(map_name, send))));
         game_loop.borrow_mut().start();
-        self.game_loops.insert(map_name.to_string(), game_loop.clone());
-        game_loop
+        game_loop.clone()
 	}
 }
 
@@ -948,8 +945,8 @@ impl WyvernApi for Connection {
             Connection::write_i32_reversed(&mut uncompressed, tile.clone() as i32);
 		}
 		for object in screen.objects.iter() {
-			uncompressed.push(object.x);
 			uncompressed.push(object.y);
+			uncompressed.push(object.x);
             let tile = self.games.borrow_mut().mappings.get(&object.tile).unwrap().clone();
             //println!("{} {} {}", object.x, object.y, tile);
             Connection::write_i16_reversed(&mut uncompressed, tile.clone());
