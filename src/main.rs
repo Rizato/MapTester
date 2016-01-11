@@ -43,6 +43,14 @@ fn main() {
     let _ = event_loop.run(&mut moba).unwrap();
 }
 
+#[derive(Clone)]
+enum Direction {
+    North,
+    South,
+    East,
+    West,
+}
+
 //This reflects the structure of the network API.
 #[derive(Clone)]
 struct GameMap {
@@ -108,12 +116,22 @@ impl GameMap {
         tiles[index].clone()
     }
 
-    fn move_user(&mut self, o:usize, n:usize) {
+    fn move_user(&mut self, o:usize, n:usize, d: Direction) -> bool {
         //println!("{}", n);
         let old = self.get_user(o); 
         let mut tiles = self.tiles.write().unwrap();
         let ref mut new = tiles[n];
-        new.user = old.user.clone();
+        match new.user {
+            Some(_) => {
+                false
+            },
+            None => {
+                let mut u = old.user.clone().unwrap();
+                u.direction = d.clone();
+                new.user = Some(u);
+                true
+            }
+        }
     }
 
     fn wipe_user(&mut self, o: usize) {
@@ -132,9 +150,9 @@ impl GameMap {
                 if x > 0 {
                     let o = y*self.width +x;
                     let n = y*self.width + x-1;
-                    //println!("{} {}", x-1, y);
-                    self.move_user(o, n);
-                    self.wipe_user(o);
+                    if self.move_user(o, n, Direction::West) {
+                        self.wipe_user(o);
+                    }
                 }
                     None
             },
@@ -142,9 +160,9 @@ impl GameMap {
                 if x < self.width-1 {
                     let o = y*self.width +x;
                     let n = y*self.width + x+1;
-                    //println!("{} {}", x+1, y);
-                    self.move_user(o, n);
-                    self.wipe_user(o);
+                    if self.move_user(o, n, Direction::East) {
+                        self.wipe_user(o);
+                    }
                 }
                     None
             },
@@ -152,9 +170,9 @@ impl GameMap {
                 if y < self.height-1 {
                     let o = y*self.width +x;
                     let n = (y+1)*self.width + x;
-                    //println!("{} {}", x, y+1);
-                    self.move_user(o, n);
-                    self.wipe_user(o);
+                    if self.move_user(o, n, Direction::South) {
+                        self.wipe_user(o);
+                    }
                 }
                     None
             },
@@ -162,9 +180,9 @@ impl GameMap {
                 if y > 0 {
                     let o = y*self.width +x;
                     let n = (y-1)*self.width + x;
-                    //println!("{} {}", x, y+1);
-                    self.move_user(o, n);
-                    self.wipe_user(o);
+                    if self.move_user(o, n, Direction::North) {
+                        self.wipe_user(o);
+                    }
                 }
                     None
             },
@@ -232,6 +250,7 @@ struct MapUser{
 	player: Arc<Player>,
 	tile: String,
     token: mio::Token,
+    direction: Direction,
 }
 
 impl MapUser {
@@ -240,6 +259,7 @@ impl MapUser {
             token: token, 
             player: player.clone(),
             tile: player.tile.clone(),
+            direction: Direction::South,
        }
     }
 }
@@ -294,13 +314,23 @@ impl MapScreen {
             for i in 0..15{
                 for j in 0..15{
                     if startx+i >= 0 && startx+(i as isize) < (map.width as isize) && starty+(j as isize) >=0 && starty+(j as isize) < (map.height as isize) {
+                        //get the tile from the map
                         let index= ((starty +j) * (map.width as isize)+ (startx+i)) as usize;
                         let tiles = map.tiles.read().unwrap();
+                        //clone the map tile
                         let tile = tiles[index].clone();
+                        //Add the terrain from the tile
                         ter.push(ScreenTerrain::new(tile.tile.clone()));
                         match tile.user {
                             Some(u) => {
-                                obj.push(ScreenObject::new(u.tile, (i-1) as u8, (j-1) as u8));
+                                let mut t_with_d = u.tile.clone();
+                                t_with_d.push_str(match u.direction {
+                                    Direction::South => {"S"},
+                                    Direction::North => {"N"},
+                                    Direction::East => {"E"},
+                                    Direction::West => {"W"},
+                                });
+                                obj.push(ScreenObject::new(t_with_d.clone(), (i-1) as u8, (j-1) as u8));
                             },
                             None => {},
                         }
@@ -552,7 +582,7 @@ impl Player {
 	fn new() -> Player {
 		Player {
             id: 0,
-            tile: "players/fire_giant.S".to_string(),
+            tile: "players/fire_giant.".to_string(),
 			hp: 0,
 			max_hp: 0,
 			name: "empty".to_string(), 
