@@ -1,4 +1,5 @@
-/*Copyright 2015 Robert Lathrop
+/*
+  Copyright 2015 Robert Lathrop
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -36,8 +37,10 @@ use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::cell::RefCell;
 use std::sync::RwLock;
+use std::any::Any;
 
 //Setting the server as the first token
 const SERVER: mio::Token = mio::Token(0);
@@ -68,12 +71,12 @@ enum Direction {
 //This reflects the structure of the network API.
 #[derive(Clone)]
 struct GameMap {
-    width: usize,
-    height: usize,
+    width: u8,
+    height: u8,
     tiles: Arc<RwLock<Vec<MapTile>>>,
     //TODO This is temporary
-    start_x: usize,
-    start_y: usize, 
+    start_x: u8,
+    start_y: u8, 
 
 }
 
@@ -125,96 +128,87 @@ impl GameMap {
 		Ok(map)
 	}
 
-    fn get_user(&self, index: usize) -> MapTile {
+    fn get_user(&self, index: u32) -> MapTile {
         let mut tiles = self.tiles.read().unwrap();
-        tiles[index].clone()
+        tiles[index as usize].clone()
     }
 
-    fn move_user(&mut self, o:usize, n:usize, d: Direction) -> bool {
+    fn move_user(&mut self, o:u32, n:u32, d: Direction) -> bool {
         //println!("{}", n);
         let old = self.get_user(o); 
         let mut tiles = self.tiles.write().unwrap();
-        let ref mut new = tiles[n];
+        let ref mut new = tiles[n as usize];
         match new.user {
             Some(_) => {
                 false
             },
             None => {
                 let mut u = old.user.clone().unwrap();
+                u.clear_movement_if_at_destination(n);
                 u.direction = d.clone();
                 new.user = Some(u);
+                new.blocked = true;
                 true
             }
         }
     }
 
-    fn wipe_user(&mut self, o: usize) {
+    fn wipe_user(&mut self, o: u32) {
         let mut tiles = self.tiles.write().unwrap();
-        let ref mut old = tiles[o];
+        let ref mut old = tiles[o as usize];
         old.user = None;
+        old.blocked = false;
     }
 
-	fn execute(&mut self, token: mio::Token, command: String) -> Option<String> {
+	fn push_command(&mut self, token: mio::Token, command: String) {
         let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
+        let start = y as u32 * self.width as u32+ x as u32;
+        let mut tiles = self.tiles.write().unwrap();
+        println!("Command {}", command);
         if command.starts_with("mouse") {
-            println!("Mouse not yet implemented");
-        } 
-        match command.trim() {
-            "a" => {
-                if x > 0 {
-                    let o = y*self.width +x;
-                    let n = y*self.width + x-1;
-                    if self.move_user(o, n, Direction::West) {
-                        self.wipe_user(o);
-                    }
+            let parts: Vec<&str> = command.split_whitespace().collect();
+            //Mouse click x,y
+			let mx = parts[1].parse::<i32>().unwrap();
+			let my = parts[2].parse::<i32>().unwrap();
+			//old x,y
+			let oy = (&start) / (self.width as u32);
+            let ox = (&start) % (self.width as u32);
+            //change in x,y. -6 cause user is always in middle of screen, no matter the click.
+            let dx = if ox as i32 + mx > 6 { ox + mx as u32 -6 } else {0};
+            let dy = if oy as i32 + my > 6 { oy + my as u32 -6 } else {0};
+            println!("Move to x{} y{}", dx, dy);
+            let end = dy * self.width as u32 + dx;
+            //tiles[start as usize].user.unwrap().set_movement(end.clone());
+            match tiles[start as usize].user {
+                Some(ref mut u) => {
+                    println!("Set movement");
+                    u.set_movement(end.clone());
+                }, 
+                None => {
+
                 }
-                    None
-            },
-            "d" => {
-                if x < self.width-1 {
-                    let o = y*self.width +x;
-                    let n = y*self.width + x+1;
-                    if self.move_user(o, n, Direction::East) {
-                        self.wipe_user(o);
-                    }
+            };
+        } else {
+            match tiles[start as usize].user {
+                Some(ref mut u) => {
+                    u.push_command(command);
+                }, 
+                None => {
+
                 }
-                    None
-            },
-            "s" => {
-                if y < self.height-1 {
-                    let o = y*self.width +x;
-                    let n = (y+1)*self.width + x;
-                    if self.move_user(o, n, Direction::South) {
-                        self.wipe_user(o);
-                    }
-                }
-                    None
-            },
-            "w" => {
-                if y > 0 {
-                    let o = y*self.width +x;
-                    let n = (y-1)*self.width + x;
-                    if self.move_user(o, n, Direction::North) {
-                        self.wipe_user(o);
-                    }
-                }
-                    None
-            },
-            _ => {
-                Some("Bad Command".to_string())
-            }
+            };
         }
 	}
 
-    fn find_tile_with_token(&self, token: mio::Token) -> Option<(usize, usize)> {
+    fn find_tile_with_token(&self, token: mio::Token) -> Option<(u32, u32)> {
         let tiles = self.tiles.read().unwrap();
         let len = tiles.len();
         for t in 0..len {
-            match tiles[t].user {
-                Some(ref p) => {
-                    if p.token == token {
-                       let y = (t) / self.width;
-                       let x = (t) % self.width;
+            match tiles[t as usize].user {
+                Some(ref u) => {
+                    if u.token == token {
+                       let y = (t as u32) / self.width as u32;
+                       let x = (t as u32) % self.width as u32;
                        return Some((x, y));
                     }
                 },
@@ -224,8 +218,82 @@ impl GameMap {
         None
     }
 	
-	fn execute_all(&self) {
-		//println!("Executed");
+	fn execute(&mut self, conns: &[mio::Token]) -> Vec<(mio::Token, u8, String)> {
+		//Go through all users. 
+		//Go through all monsters & towers
+		//Go through all spells and projectiles
+		//Resolve any combat/damage
+		//Add responses for action specific to players involved
+		//return the vec
+		let mut retval = vec![];
+		for token in conns.iter() {
+			let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
+        	let index = y * self.width as u32 + x;
+        	let mut command = None;
+            let mut t= None;
+        	{
+        		let mut tile = self.tiles.write().unwrap();
+        		command = match tile[index as usize].user {
+                    Some(ref mut u) => { 
+                        t = Some(u.token.clone());
+                        u.get_command() 
+                    },
+                    None => None,
+                };
+            }
+            match command {
+                Some(c) => {
+                    match self.execute_command(t.unwrap(), c) {
+                        Some(responses) => {
+                            for x in 0..responses.len() {
+                                let (token, style, response) = responses[x].clone();
+                    			retval.push((token, style, response));
+                            }
+                        },
+                        None => {},
+                    };
+                },
+                None => {},
+            }
+		}
+        retval
+	}
+	
+	fn execute_command(&mut self, token: mio::Token, command: String ) -> Option<Vec<(mio::Token, u8, String)>> {
+		let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
+        let index = y as u32 * self.width as u32 + x as u32;
+		if command.starts_with("end") {
+			let parts: Vec<&str> = command.split_whitespace().collect();
+			let end = parts[1].parse::<u32>().unwrap();
+            println!("Execute path: {} {}", index, end);
+			let e = Player::path_next(&self, index.clone(), end);
+            match e {
+                Some(user_end) => {
+			        let dx = user_end % self.width as u32;
+			        let dy = user_end / self.width as u32;
+                    // Since the primary objective is east/west I will lean towards e/w when moving diagonally
+                    let mut dir = Direction::South;
+                    if dx > x as u32  {
+                    	dir = Direction::East;
+                    } else if dx < x as u32 {
+                    	dir = Direction::West;
+                    } else if dy < y as u32 {
+                    	dir = Direction::North;
+                    } 
+                    if self.move_user(index.clone(), user_end, dir) {
+                    	self.wipe_user(index);
+                    }
+                    None
+                },
+                None => {
+			        Some(vec![(token.clone(), 5,  "No Path Found".to_string()); 1])
+                },
+            }
+		} else {
+			//System message
+            println!("{}", command);
+			Some(vec![(token.clone(), 5,  "Bad command".to_string()); 1])
+		}
 	}
 	
 	fn send_portion(&self, token: mio::Token) -> MapScreen {
@@ -247,6 +315,7 @@ struct MapTile{
 	//No position, because position is determined by the position in vector
 	tile: String,
     user: Option<MapUser>,
+    blocked: bool,
     //TODO add a Vec<MapItem>
 }
 
@@ -255,6 +324,7 @@ impl MapTile {
 		MapTile{
 			tile: tile,
             user: None,
+            blocked: false,
 		}
 	}
 }
@@ -264,17 +334,76 @@ struct MapUser{
 	player: Arc<Player>,
 	tile: String,
     token: mio::Token,
+    commands: Vec<String>,
     direction: Direction,
+    //Coordinates (x, y). This is where the char is currently trying to move to. It has to be interpereted by the Map, and converted to an x, y relative to the actual map, not the user.
+    movement: Option<u32>,
+    movement_ticks: u8,
+     
 }
 
-impl MapUser {
+impl  MapUser {
     fn new(token: mio::Token, player: Arc<Player>) -> MapUser {
        MapUser {
             token: token, 
             player: player.clone(),
             tile: player.tile.clone(),
+            commands: vec![],
             direction: Direction::South,
+            movement: None,
+            movement_ticks: 0,
        }
+    }
+    
+    fn push_command(&mut self, command: String) {
+    	self.commands.insert(0, command);
+    }
+    
+    fn set_movement(&mut self, end: u32) {
+    	self.movement = Some(end);
+    }
+
+    fn clear_movement_if_at_destination(&mut self, end: u32) {
+        let replacement: Option<u32>  = match self.movement {
+            Some(e) => {
+                if e == end {
+                   None
+                } else {
+                    Some(e)
+                }
+            },
+            None => {None},
+        };
+        self.movement = replacement;
+    }
+    
+    fn get_command(&mut self) -> Option<String> {
+    	let has_movement = match self.movement{
+    		Some(_) =>  {true},
+    		None => {false},
+    	};
+    	if has_movement && self.movement_ticks >= self.player.speed /* *self.slow */ {
+    		//The command returns the absolute location where the user wants to end up. The map knows it can only move 1 space towards that destination
+    		let end = self.movement.unwrap();
+    		 self.movement_ticks = 0;
+             println!("got command {}", end);
+    		Some(format!("end {}", end))
+    	} else if self.commands.len() > 0 {
+    		self.movement_ticks = if self.movement_ticks == 255 {
+                self.movement_ticks 
+            } else {
+                self.movement_ticks + 1
+            };
+    		self.commands.pop()
+    	} else {
+    		self.movement_ticks = if self.movement_ticks == 255 {
+                self.movement_ticks 
+            } else {
+                self.movement_ticks + 1
+            };
+    		None
+    	}
+    	
     }
 }
 
@@ -317,14 +446,14 @@ struct MapScreen {
 }
 
 impl MapScreen {
-	fn new(map: &GameMap, x: usize, y: usize) -> MapScreen {
+	fn new(map: &GameMap, x: u32, y: u32) -> MapScreen {
         let startx: isize = x as isize -7;
         let starty: isize = y as isize -7;
 		let mut ter = vec![];
 		let mut obj = vec![];
         //If coords are valid we will actually draw something
         let empty = ScreenTerrain::new("terrain/empty".to_string());
-        if map.width > x && map.height > y {
+        if map.width as u32 > x && map.height as u32 > y {
             for i in 0..15{
                 for j in 0..15{
                     if startx+i >= 0 && startx+(i as isize) < (map.width as isize) && starty+(j as isize) >=0 && starty+(j as isize) < (map.height as isize) {
@@ -332,7 +461,7 @@ impl MapScreen {
                         let index= ((starty +j) * (map.width as isize)+ (startx+i)) as usize;
                         let tiles = map.tiles.read().unwrap();
                         //clone the map tile
-                        let tile = tiles[index].clone();
+                        let tile = tiles[index as usize].clone();
                         //Add the terrain from the tile
                         ter.push(ScreenTerrain::new(tile.tile.clone()));
                         match tile.user {
@@ -401,13 +530,13 @@ impl GameLoop {
                for t in threads {
                     t.join().unwrap();
                }
-               let mut commands: Vec<(mio::Token, String)> = vec![];
+               let mut map = game_map.write().unwrap();
                //This can cause DOS by keeping the commands from executing
                'outer: loop {
                    match recv.try_recv() {
                        Ok(Msg::Command(token, command)) => {
                            //println!("{}", command);
-                           &commands.push((token, command)); 
+                           &map.push_command(token, command); 
                        },
                        _ => {
                            //println!("Nothin.");
@@ -415,19 +544,15 @@ impl GameLoop {
                        }
                    }
                }
-               let mut map = game_map.write().unwrap();
-               for (token, comm) in commands {
-                    match map.execute(token, comm) {
-                        Some(response) => {
-                            //send command execution response (Use this to send item/health updates from recoil)
-                            let _ = to_mio.send(Msg::TextOutput(token, 2, response));
-                        },
-                        _ => {},
-                    }
+               //TODO get these responses in there somehow
+               let responses = map.execute(&mutex);
+               //Cannot seem to decontruct tuples in a loop. Doing the index version instead of
+               //iterating
+               for i in 0..responses.len() {
+                   let (token, style, response) = responses[i].clone();
+               	   to_mio.send(Msg::TextOutput(token, style, response));
                }
-               map.execute_all();
                //send map & health updates
-               //his map should be based on the player position normally.
                for conn in mutex.iter() {
                    let screen = map.send_portion(conn.clone());
                    //Need to see response from sender
@@ -590,17 +715,173 @@ struct Player{
 	hp: i32,
 	max_hp: i32,
 	name: String,
+    speed: u8,
 }
 
 impl Player {
 	fn new() -> Player {
 		Player {
             id: 0,
-            tile: "players/fire_giant.".to_string(),
+            tile: "players/wizard.".to_string(),
 			hp: 0,
 			max_hp: 0,
 			name: "empty".to_string(), 
+            speed: 10,
 		}
+	}
+	
+	fn lowest_estimate(open: &HashSet<u32>, estimates: &mut HashMap<u32, u32>) -> u32{
+		let mut min = 9999;
+		let mut index_min = 0;
+		for node in open.iter() {
+			let mut val = estimates.entry(*node).or_insert(255); 
+			if  *val < min {
+				min = val.clone();
+				index_min = node.clone();
+			}
+		}
+		index_min
+	}
+	
+	fn find_move(path: &HashMap<u32, u32>, end: u32) -> u32 {
+		let mut current = end;
+        loop {
+			let temp = match path.get(&current) {
+                Some(previous) => {
+                    previous.clone()
+                },
+                None => {
+                    break;
+                }
+            };
+            if !path.contains_key(&temp) {
+                break;
+            }
+            current = temp.clone();
+            let x = temp % 30;
+            let y = temp /30;
+            println!("move {} {}", x, y);
+		}
+        let x = current % 30;
+        let y = current /30;
+        println!("actual {} {}", x, y);
+		current
+	}
+}
+
+trait Moveable {
+	///This will do the pathfinding, and give the next location for the player
+	fn path_next(map: &GameMap, start: u32, end: u32) -> Option<u32>;
+	fn hueristic(width: u8, start: u32, end: u32) -> u32;
+	fn find_neighbors(index: u32, map: &GameMap) -> Vec<u32>;
+}
+
+impl Moveable for Player {
+	//Computes the shortest path. Gives the next step in that. 
+	fn path_next(map: &GameMap, start: u32, end: u32) -> Option<u32> {
+        println!("Path!");
+		
+		//A* algorithm
+		let mut closed = HashSet::new();
+		//This should be a priority queue (or min-heap)
+		let mut open = HashSet::new();
+		//This is a map where each node records the node that came before it.
+		//Why not use a doubly linked list?
+		let mut path = HashMap::new();
+		open.insert(start.clone());
+		
+		let mut score_from:HashMap<u32, u32> = HashMap::new();
+		score_from.insert(start.clone(), 0);
+		let mut estimate_to: HashMap<u32, u32> = HashMap::new();
+		estimate_to.insert(start.clone(), Player::hueristic(map.width.clone(), start.clone(), end.clone()));
+		while open.len() > 0 {
+			//Grab start with the smallest estimate
+			let current = Player::lowest_estimate(&open, &mut estimate_to);
+			if current == end {
+				//return the index of the first move 
+                println!("Finished! {} {}", current, end);
+				return Some(Player::find_move(&path, end.clone()));
+			}
+			open.remove(&current);
+			closed.insert(current.clone());
+			//Need to figure out how to get all neighbors
+			let neighbors = Player::find_neighbors(current, map);
+			for neighbor in neighbors.iter() {
+                println!("Neighbor {}", neighbor);
+				if closed.contains(neighbor) {
+					continue;
+				}
+                println!("current {}", current);
+                //This should always have a value...
+				let possible_score = score_from.get(&current).unwrap() + 1 as u32;
+				if !open.contains(neighbor) {
+					path.insert(neighbor.clone(), current);
+					open.insert(neighbor.clone());
+                    score_from.insert(neighbor.clone(), possible_score.clone()); 
+                    println!("possible score {}", possible_score);
+					estimate_to.insert(neighbor.clone(),  possible_score + Player::hueristic(map.width.clone(), neighbor.clone(), end.clone()));	
+				} else {
+					match score_from.clone().get_mut(neighbor) {
+						Some(ref mut value) => {
+							if value.clone() > possible_score {
+								continue;
+							} else {
+                                let mut n = path.entry(neighbor.clone()).or_insert(current.clone());
+                                *n = current.clone();
+								score_from.insert(neighbor.clone(), possible_score.clone());
+								estimate_to.insert(neighbor.clone(),  possible_score + Player::hueristic(map.width.clone(), neighbor.clone(), end.clone()));	
+							}
+						},
+						None => {
+							path.insert(neighbor.clone(), current);
+							score_from.insert(neighbor.clone(), possible_score.clone());
+							estimate_to.insert(neighbor.clone(),possible_score + Player::hueristic(map.width.clone(), neighbor.clone(), end.clone()));
+						},
+					}
+				}
+			}
+		}
+		None
+	}
+	
+	fn hueristic(width: u8, start: u32, end: u32) -> u32{
+		//Just using pythagorean theorem to compute the shortest path.
+		let dx = ((start % width as u32) as i32 - (end % width as u32) as i32).abs();
+		let dy = ((start / width as u32) as i32 - (end / width as u32) as i32).abs();
+		if dy == 0 {
+			dx as u32
+		} else if dx == 0 {
+			dy as u32
+		} else {
+            println!("heuristic vals {} {}", dx, dy);
+			((dx * dx + dy * dy) as f64).sqrt() as u32
+		}
+	}
+	
+	fn find_neighbors(index: u32, map: &GameMap) -> Vec<u32>{
+		let width = map.width as u32;
+		let x = index % width;
+		let y = index / width;
+		let mut neighbors = vec![];
+		for dx in 0..3 {
+			for dy in 0..3 {
+                if dy == dx || (dx == 0 && dy == 2) || (dx == 2 && dy == 0)  {
+                    continue;
+                }
+				let current_x = (x as i32) + (dx as i32) -1;
+				let current_y = (y as i32) + (dy as i32) -1;
+				if current_x >=0 && current_y >=0 {
+                    let i = (current_y as u32) * width as u32 + (current_x as u32);
+                    println!("neighbor {}", i);
+					//if not blocked, add to neighbors
+					let tiles = map.tiles.read().unwrap();
+					if !tiles[i as usize].blocked {
+						neighbors.push(i.clone());
+					}
+				}
+			}
+		}
+        neighbors
 	}
 }
 
