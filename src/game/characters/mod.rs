@@ -20,10 +20,10 @@ use game::gamemap::GameMap;
 
 ///This trait is used to define a set of functions for moveable objects. Helps with pathfinding.
 pub trait Moveable {
-	///This will do the pathfinding, and give the next location for the player
-	fn path_next(map: &GameMap, start: u32, end: u32) -> Option<u32>;
+    ///This will do the pathfinding, and give the next location for the player
+    fn path_next(map: &GameMap, start: u32, end: u32) -> Option<u32>;
     ///This gives an estimate for the total, for use in the hueristic
-	fn hueristic(width: u8, start: u32, end: u32) -> u32;
+    fn hueristic(width: u8, start: u32, end: u32) -> u32;
     ///Returns a vector of indeices for valid neighbors
-	fn find_neighbors(index: u32, map: &GameMap) -> Vec<u32>;
+    fn find_neighbors(index: u32, map: &GameMap) -> Vec<u32>;
 }

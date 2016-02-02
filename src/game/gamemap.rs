@@ -50,7 +50,7 @@ pub struct GameMap {
 impl GameMap {
     /// This currently creates a generic map. It will eventually load a map by filename and turn
     /// that into a valid MapObject
-	pub fn new(mapname: &str) -> Result<GameMap, &str> {
+    pub fn new(mapname: &str) -> Result<GameMap, &str> {
         //TODO Load map from file use ProtocolBuffers.
         let mut tiles: Vec<MapTile> = vec![];
         //Just doing a fake thing really quick.
@@ -82,7 +82,7 @@ impl GameMap {
             tiles.push(MapTile::new("terrain/carpet2".to_string()));
         }
         let mut ti = Arc::new(RwLock::new(tiles));
-		let map = GameMap {
+        let map = GameMap {
             width: 30,
             height: 30,
             start_x: 15,
@@ -92,10 +92,10 @@ impl GameMap {
             //   0  1  2  3  4  5  6  7
             // 0 0  1  2  3  4  5  6  7
             // 1 8  9  10 11 12 13 14 15
-			tiles: ti.clone(), 
-		};
-		Ok(map)
-	}
+            tiles: ti.clone(), 
+        };
+        Ok(map)
+    }
 
     ///Grabs the MapTile at the given index
     fn get_user(&self, index: u32) -> MapTile {
@@ -135,7 +135,7 @@ impl GameMap {
     }
 
     /// Adds the command from the client to the user object
-	pub fn push_command(&mut self, token: mio::Token, command: String) {
+    pub fn push_command(&mut self, token: mio::Token, command: String) {
         let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
         let start = y as u32 * self.width as u32+ x as u32;
         let mut tiles = self.tiles.write().unwrap();
@@ -143,10 +143,10 @@ impl GameMap {
         if command.starts_with("mouse") {
             let parts: Vec<&str> = command.split_whitespace().collect();
             //Mouse click x,y
-			let mx = parts[1].parse::<i32>().unwrap();
-			let my = parts[2].parse::<i32>().unwrap();
-			//old x,y
-			let oy = (&start) / (self.width as u32);
+            let mx = parts[1].parse::<i32>().unwrap();
+            let my = parts[2].parse::<i32>().unwrap();
+            //old x,y
+            let oy = (&start) / (self.width as u32);
             let ox = (&start) % (self.width as u32);
             //change in x,y. -6 cause user is always in middle of screen, no matter the click.
             let dx = if ox as i32 + mx > 6 { ox + mx as u32 -6 } else {0};
@@ -173,7 +173,7 @@ impl GameMap {
                 }
             };
         }
-	}
+    }
 
     /// Returns the x,y value of a token
     fn find_tile_with_token(&self, token: mio::Token) -> Option<(u32, u32)> {
@@ -193,25 +193,25 @@ impl GameMap {
         }
         None
     }
-	
+    
     /// This goes through all connections, tries to read off the queue, and then executes each
     ///command, possibly returning a tailored response 
-	pub fn execute(&mut self, conns: &[mio::Token]) -> Vec<(mio::Token, u8, String)> {
-		//Go through all users. 
-		//Go through all monsters & towers
-		//Go through all spells and projectiles
-		//Resolve any combat/damage
-		//Add responses for action specific to players involved
-		//return the vec
-		let mut retval = vec![];
-		for token in conns.iter() {
-			let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
-        	let index = y * self.width as u32 + x;
-        	let mut command = None;
+    pub fn execute(&mut self, conns: &[mio::Token]) -> Vec<(mio::Token, u8, String)> {
+        //Go through all users. 
+        //Go through all monsters & towers
+        //Go through all spells and projectiles
+        //Resolve any combat/damage
+        //Add responses for action specific to players involved
+        //return the vec
+        let mut retval = vec![];
+        for token in conns.iter() {
+            let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
+            let index = y * self.width as u32 + x;
+            let mut command = None;
             let mut t= None;
-        	{
-        		let mut tile = self.tiles.write().unwrap();
-        		command = match tile[index as usize].user {
+            {
+                let mut tile = self.tiles.write().unwrap();
+                command = match tile[index as usize].user {
                     Some(ref mut u) => { 
                         t = Some(u.token.clone());
                         u.get_command() 
@@ -225,7 +225,7 @@ impl GameMap {
                         Some(responses) => {
                             for x in 0..responses.len() {
                                 let (token, style, response) = responses[x].clone();
-                    			retval.push((token, style, response));
+                                retval.push((token, style, response));
                             }
                         },
                         None => {},
@@ -233,54 +233,54 @@ impl GameMap {
                 },
                 None => {},
             }
-		}
+        }
         retval
-	}
-	
+    }
+    
     ///Executes a given command. Generates a possibly generates a vector of responses.
-	fn execute_command(&mut self, token: mio::Token, command: String ) -> Option<Vec<(mio::Token, u8, String)>> {
-		let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
+    fn execute_command(&mut self, token: mio::Token, command: String ) -> Option<Vec<(mio::Token, u8, String)>> {
+        let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
         let index = y as u32 * self.width as u32 + x as u32;
-		if command.starts_with("end") {
-			let parts: Vec<&str> = command.split_whitespace().collect();
-			let end = parts[1].parse::<u32>().unwrap();
+        if command.starts_with("end") {
+            let parts: Vec<&str> = command.split_whitespace().collect();
+            let end = parts[1].parse::<u32>().unwrap();
             println!("Execute path: {} {}", index, end);
-			let e = Player::path_next(&self, index.clone(), end);
+            let e = Player::path_next(&self, index.clone(), end);
             match e {
                 Some(user_end) => {
-			        let dx = user_end % self.width as u32;
-			        let dy = user_end / self.width as u32;
+                    let dx = user_end % self.width as u32;
+                    let dy = user_end / self.width as u32;
                     // Since the primary objective is east/west I will lean towards e/w when moving diagonally
                     let mut dir = Direction::South;
                     if dx > x as u32  {
-                    	dir = Direction::East;
+                        dir = Direction::East;
                     } else if dx < x as u32 {
-                    	dir = Direction::West;
+                        dir = Direction::West;
                     } else if dy < y as u32 {
-                    	dir = Direction::North;
+                        dir = Direction::North;
                     } 
                     if self.move_user(index.clone(), user_end, dir) {
-                    	self.wipe_user(index);
+                        self.wipe_user(index);
                     }
                     None
                 },
                 None => {
-			        Some(vec![(token.clone(), 5,  "No Path Found".to_string()); 1])
+                    Some(vec![(token.clone(), 5,  "No Path Found".to_string()); 1])
                 },
             }
-		} else {
-			//System message
+        } else {
+            //System message
             println!("{}", command);
-			Some(vec![(token.clone(), 5,  "Bad command".to_string()); 1])
-		}
-	}
-	
+            Some(vec![(token.clone(), 5,  "Bad command".to_string()); 1])
+        }
+    }
+    
     /// This generates a new MapScreen based on the location of the given connection's user
-	pub fn send_portion(&self, token: mio::Token) -> MapScreen {
-		//This sends the squares around the user, which will always be centered in the screen.
+    pub fn send_portion(&self, token: mio::Token) -> MapScreen {
+        //This sends the squares around the user, which will always be centered in the screen.
         let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
-		MapScreen::new(self, x, y)
-	}
+        MapScreen::new(self, x, y)
+    }
 
     /// Adds a player to the map. Puts it at the starting location.
     pub fn add_player(&mut self, token: mio::Token, player: Arc<Player>) {
@@ -295,21 +295,21 @@ impl GameMap {
 /// is blocked or not.
 #[derive(Clone)]
 pub struct MapTile{
-	//No position, because position is determined by the position in vector
-	tile: String,
+    //No position, because position is determined by the position in vector
+    tile: String,
     pub user: Option<MapUser>,
     pub blocked: bool,
     //TODO add a Vec<MapItem>
 }
 
 impl MapTile {
-	fn new(tile: String) -> MapTile {
-		MapTile{
-			tile: tile,
+    fn new(tile: String) -> MapTile {
+        MapTile{
+            tile: tile,
             user: None,
             blocked: false,
-		}
-	}
+        }
+    }
 }
 
 ///Is a controllable thing on the map. Has a tile, which does not hold a direction(to be added
@@ -319,8 +319,8 @@ impl MapTile {
 ///he player Speed value.
 #[derive(Clone)]
 pub struct MapUser{
-	player: Arc<Player>,
-	tile: String,
+    player: Arc<Player>,
+    tile: String,
     token: mio::Token,
     commands: Vec<String>,
     direction: Direction,
@@ -347,12 +347,12 @@ impl  MapUser {
     
     ///Pushes a command to the command queue for the mapuser
     fn push_command(&mut self, command: String) {
-    	self.commands.insert(0, command);
+        self.commands.insert(0, command);
     }
     
     ///Puts an absolute X, Y as the movement goal for this mapuser
     fn set_movement(&mut self, end: u32) {
-    	self.movement = Some(end);
+        self.movement = Some(end);
     }
 
     ///Checks the end index against the movement goal index. If they are the same,
@@ -378,32 +378,32 @@ impl  MapUser {
     ///movement goal set, it will always do movement. Otherwise, it will increment ticks, and grab
     ///the top command from the queue.
     fn get_command(&mut self) -> Option<String> {
-    	let has_movement = match self.movement{
-    		Some(_) =>  {true},
-    		None => {false},
-    	};
-    	if has_movement && self.movement_ticks >= self.player.speed /* *self.slow */ {
-    		//The command returns the absolute location where the user wants to end up. The map knows it can only move 1 space towards that destination
-    		let end = self.movement.unwrap();
-    		 self.movement_ticks = 0;
+        let has_movement = match self.movement{
+            Some(_) =>  {true},
+            None => {false},
+        };
+        if has_movement && self.movement_ticks >= self.player.speed /* *self.slow */ {
+            //The command returns the absolute location where the user wants to end up. The map knows it can only move 1 space towards that destination
+            let end = self.movement.unwrap();
+             self.movement_ticks = 0;
              println!("got command {}", end);
-    		Some(format!("end {}", end))
-    	} else if self.commands.len() > 0 {
-    		self.movement_ticks = if self.movement_ticks == 255 {
+            Some(format!("end {}", end))
+        } else if self.commands.len() > 0 {
+            self.movement_ticks = if self.movement_ticks == 255 {
                 self.movement_ticks 
             } else {
                 self.movement_ticks + 1
             };
-    		self.commands.pop()
-    	} else {
-    		self.movement_ticks = if self.movement_ticks == 255 {
+            self.commands.pop()
+        } else {
+            self.movement_ticks = if self.movement_ticks == 255 {
                 self.movement_ticks 
             } else {
                 self.movement_ticks + 1
             };
-    		None
-    	}
-    	
+            None
+        }
+        
     }
 }
 
@@ -417,13 +417,13 @@ pub struct ScreenObject {
 
 impl ScreenObject {
     ///Creates a new screen object with the given tile, x and y
-	fn new(tile: String, x: u8, y:u8) -> ScreenObject{
-		ScreenObject{
-			tile: tile,
-			x: x,
-			y: y,
-		}
-	}
+    fn new(tile: String, x: u8, y:u8) -> ScreenObject{
+        ScreenObject{
+            tile: tile,
+            x: x,
+            y: y,
+        }
+    }
 }
 
 ///This struct just holds a tile
@@ -446,21 +446,21 @@ impl ScreenTerrain {
 ///specifically, rather than by their position in the array.
 #[derive(Clone)]
 pub struct MapScreen {
-	//15x15 vector. 
-	pub terrain: Vec<ScreenTerrain>,
-	//User art at 7,7
-	pub objects: Vec<ScreenObject>,
+    //15x15 vector. 
+    pub terrain: Vec<ScreenTerrain>,
+    //User art at 7,7
+    pub objects: Vec<ScreenObject>,
 }
 
 impl MapScreen {
     ///generates a new MapScreen based on the map and a given x & y. This will grab the 15x15
     ///matrix centered on the given x and y. Any spaces beyond the boundaries of the map is replaced
     ///with "empty" tiles
-	pub fn new(map: &GameMap, x: u32, y: u32) -> MapScreen {
+    pub fn new(map: &GameMap, x: u32, y: u32) -> MapScreen {
         let startx: isize = x as isize -7;
         let starty: isize = y as isize -7;
-		let mut ter = vec![];
-		let mut obj = vec![];
+        let mut ter = vec![];
+        let mut obj = vec![];
         //If coords are valid we will actually draw something
         let empty = ScreenTerrain::new("terrain/empty".to_string());
         if map.width as u32 > x && map.height as u32 > y {
@@ -493,9 +493,9 @@ impl MapScreen {
                 }
             }
         }
-		MapScreen {
-			terrain: ter,
-			objects:obj,
-		}
-	}
+        MapScreen {
+            terrain: ter,
+            objects:obj,
+        }
+    }
 }

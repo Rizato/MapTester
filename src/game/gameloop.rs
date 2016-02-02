@@ -40,25 +40,25 @@ use conn::server::Msg;
 /// This struct holds the map, and a list of tokens that are connected to this game loop. 
 /// This structure creates the background thread that operates the actual game loop.
 pub struct GameLoop {
-	//Map with all items & tiles
-	game_map: Arc<RwLock<GameMap>>,
+    //Map with all items & tiles
+    game_map: Arc<RwLock<GameMap>>,
     connections: Arc<RwLock<Vec<mio::Token>>>, 
     send: mio::Sender<Msg>,
 }
 
 impl GameLoop {
     ///creates a new game loop
-	pub fn new(mapname : &str, send: mio::Sender<Msg>) -> GameLoop {
-		let mut gloop = GameLoop {
-			game_map: Arc::new(RwLock::new(GameMap::new(mapname).unwrap())),
-			connections: Arc::new(RwLock::new(vec![])),
+    pub fn new(mapname : &str, send: mio::Sender<Msg>) -> GameLoop {
+        let mut gloop = GameLoop {
+            game_map: Arc::new(RwLock::new(GameMap::new(mapname).unwrap())),
+            connections: Arc::new(RwLock::new(vec![])),
             send: send,
-		};
+        };
         gloop.start();
         gloop
-	}
-	
-	
+    }
+    
+    
     ///Creates the game loop
     ///This loop sends a message to all connections to ask for new commands
     ///Then it listens on the created channel for any commands.
@@ -68,11 +68,11 @@ impl GameLoop {
     ///The loop then sends the responses, and updated states then updated maps
     ///
     /// TODO Redo the commands to reduce the amount sent over the notification channel.
-	pub fn start(&mut self) {
+    pub fn start(&mut self) {
         let game_map = self.game_map.clone();
         let connections = self.connections.clone();
         let to_mio = self.send.clone();
-		thread::spawn(move || {
+        thread::spawn(move || {
            let (send, recv) = channel(); 
            loop {
                let mut threads = vec![];
@@ -111,7 +111,7 @@ impl GameLoop {
                //iterating
                for i in 0..responses.len() {
                    let (token, style, response) = responses[i].clone();
-               	   to_mio.send(Msg::TextOutput(token, style, response));
+                   to_mio.send(Msg::TextOutput(token, style, response));
                }
                //send map & health updates
                for conn in mutex.iter() {
@@ -133,7 +133,7 @@ impl GameLoop {
                }
            }
         });
-	}
+    }
     
     ///Lets a connection join the game loop
     pub fn join(&mut self, token: mio::Token, player: Arc<Player>) {
