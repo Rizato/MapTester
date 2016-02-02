@@ -12,6 +12,9 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.*/
+/// This module declares the player object. 
+/// The player defines attributes such as the tile to represent the character,
+/// the health, mana pool, character name and speed
 
 use game::characters::Moveable;
 use game::gamemap::GameMap;
@@ -19,6 +22,7 @@ use game::gamemap::GameMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+///Defines the Player struct.
 pub struct Player{
     id: i64,
     pub tile: String,
@@ -29,6 +33,8 @@ pub struct Player{
 }
 
 impl Player {
+    ///Creates a new player. Defaults with the wizard tile, and a speed of 10 (1 movement every 20
+    ///ms)
 	pub fn new() -> Player {
 		Player {
             id: 0,
@@ -40,6 +46,8 @@ impl Player {
 		}
 	}
 	
+    ///This is an assisting function for moveable and the A* algorithm. It basically just tries to
+    ///find the lowest value in the open tiles in the A* algorithm
 	fn lowest_estimate(open: &HashSet<u32>, estimates: &mut HashMap<u32, u32>) -> u32{
 		let mut min = 9999;
 		let mut index_min = 0;
@@ -53,6 +61,8 @@ impl Player {
 		index_min
 	}
 	
+    ///Given a map of tiles to the tile that led to it and the ending tile, it will go back through
+    ///the map, finding the first move on the path
 	fn find_move(path: &HashMap<u32, u32>, end: u32) -> u32 {
 		let mut current = end;
         loop {
@@ -79,13 +89,11 @@ impl Player {
 	}
 }
 
-
-
+///Implements the A* pathfinding algorithm for the player
 impl Moveable for Player {
-	//Computes the shortest path. Gives the next step in that. 
+	///Computes the shortest path according to the A* algorithm. Gives the next step in the found path 
 	fn path_next(map: &GameMap, start: u32, end: u32) -> Option<u32> {
         println!("Path!");
-		
 		//A* algorithm
 		let mut closed = HashSet::new();
 		//This should be a priority queue (or min-heap)
@@ -149,6 +157,7 @@ impl Moveable for Player {
 		None
 	}
 	
+    ///Gives a hueristic estimate by just doing the pythagorean theorem.
 	fn hueristic(width: u8, start: u32, end: u32) -> u32{
 		//Just using pythagorean theorem to compute the shortest path.
 		let dx = ((start % width as u32) as i32 - (end % width as u32) as i32).abs();
@@ -163,6 +172,7 @@ impl Moveable for Player {
 		}
 	}
 	
+    ///Returns the found neighbors to a given index. Does one up, down, left and right.
 	fn find_neighbors(index: u32, map: &GameMap) -> Vec<u32>{
 		let width = map.width as u32;
 		let x = index % width;

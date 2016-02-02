@@ -21,6 +21,11 @@ use game::characters::player::Player;
 use std::sync::RwLock;
 use std::sync::Arc;
 
+/// This module holds all the map related stuff. It has the GameMap itself, along with the
+/// MapScreen, ScreenObjects, 
+
+/// Enum for the direction that a moveable object just went. Gets sent to the connection when
+/// deciding what tile to draw.
 #[derive(Clone)]
 enum Direction {
     North,
@@ -29,7 +34,9 @@ enum Direction {
     West,
 }
 
-//This reflects the structure of the network API.
+///This is the map. It holds all of the terratin, and all of the objects and such. 
+///It also holds the x,y of the start value. This is only temporary until I get objects for start
+///values
 #[derive(Clone)]
 pub struct GameMap {
     pub width: u8,
@@ -41,6 +48,8 @@ pub struct GameMap {
 }
 
 impl GameMap {
+    /// This currently creates a generic map. It will eventually load a map by filename and turn
+    /// that into a valid MapObject
 	pub fn new(mapname: &str) -> Result<GameMap, &str> {
         //TODO Load map from file use ProtocolBuffers.
         let mut tiles: Vec<MapTile> = vec![];
@@ -88,11 +97,13 @@ impl GameMap {
 		Ok(map)
 	}
 
+    ///Grabs the MapTile at the given index
     fn get_user(&self, index: u32) -> MapTile {
         let mut tiles = self.tiles.read().unwrap();
         tiles[index as usize].clone()
     }
 
+    ///Moves a user from one tile to another, replaces the direction witht he given direction
     fn move_user(&mut self, o:u32, n:u32, d: Direction) -> bool {
         //println!("{}", n);
         let old = self.get_user(o); 
@@ -113,13 +124,17 @@ impl GameMap {
         }
     }
 
+    /// Removes the tile at the given index
     fn wipe_user(&mut self, o: u32) {
+        //TODO make sure the tile was not empty before (Cause if it was empty and was blocked it is
+        //blocked by an object, and we don't want to unblock.
         let mut tiles = self.tiles.write().unwrap();
         let ref mut old = tiles[o as usize];
         old.user = None;
         old.blocked = false;
     }
 
+    /// Adds the command from the client to the user object
 	pub fn push_command(&mut self, token: mio::Token, command: String) {
         let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
         let start = y as u32 * self.width as u32+ x as u32;
@@ -160,6 +175,7 @@ impl GameMap {
         }
 	}
 
+    /// Returns the x,y value of a token
     fn find_tile_with_token(&self, token: mio::Token) -> Option<(u32, u32)> {
         let tiles = self.tiles.read().unwrap();
         let len = tiles.len();
@@ -178,6 +194,8 @@ impl GameMap {
         None
     }
 	
+    /// This goes through all connections, tries to read off the queue, and then executes each
+    ///command, possibly returning a tailored response 
 	pub fn execute(&mut self, conns: &[mio::Token]) -> Vec<(mio::Token, u8, String)> {
 		//Go through all users. 
 		//Go through all monsters & towers
@@ -219,6 +237,7 @@ impl GameMap {
         retval
 	}
 	
+    ///Executes a given command. Generates a possibly generates a vector of responses.
 	fn execute_command(&mut self, token: mio::Token, command: String ) -> Option<Vec<(mio::Token, u8, String)>> {
 		let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
         let index = y as u32 * self.width as u32 + x as u32;
@@ -256,12 +275,14 @@ impl GameMap {
 		}
 	}
 	
+    /// This generates a new MapScreen based on the location of the given connection's user
 	pub fn send_portion(&self, token: mio::Token) -> MapScreen {
 		//This sends the squares around the user, which will always be centered in the screen.
         let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
 		MapScreen::new(self, x, y)
 	}
 
+    /// Adds a player to the map. Puts it at the starting location.
     pub fn add_player(&mut self, token: mio::Token, player: Arc<Player>) {
         //TODO Add match start.user None/Some & determine whether to add in a different location
         let mut tiles = self.tiles.write().unwrap();
@@ -270,6 +291,8 @@ impl GameMap {
     }
 }
 
+/// A single tile option, which optionally holds a user. Holds an image tile, and whther the tile
+/// is blocked or not.
 #[derive(Clone)]
 pub struct MapTile{
 	//No position, because position is determined by the position in vector
@@ -289,6 +312,11 @@ impl MapTile {
 	}
 }
 
+///Is a controllable thing on the map. Has a tile, which does not hold a direction(to be added
+///later). It also holds a queue of directions, and the player object at the location. Lastly, it
+///holds some movement helper values. That is, the final destination of the user initiated
+///movement, as well as the number of cycles since the last move. This is used in conjunction witht
+///he player Speed value.
 #[derive(Clone)]
 pub struct MapUser{
 	player: Arc<Player>,
@@ -303,6 +331,8 @@ pub struct MapUser{
 }
 
 impl  MapUser {
+    ///This creates a new map user object, with some defaults. Takes in a player object and the
+    ///token for the connection
     fn new(token: mio::Token, player: Arc<Player>) -> MapUser {
        MapUser {
             token: token, 
@@ -315,14 +345,18 @@ impl  MapUser {
        }
     }
     
+    ///Pushes a command to the command queue for the mapuser
     fn push_command(&mut self, command: String) {
     	self.commands.insert(0, command);
     }
     
+    ///Puts an absolute X, Y as the movement goal for this mapuser
     fn set_movement(&mut self, end: u32) {
     	self.movement = Some(end);
     }
 
+    ///Checks the end index against the movement goal index. If they are the same,
+    /// it wipes out the movement goalt.
     fn clear_movement_if_at_destination(&mut self, end: u32) {
         let replacement: Option<u32>  = match self.movement {
             Some(e) => {
@@ -337,6 +371,12 @@ impl  MapUser {
         self.movement = replacement;
     }
     
+    ///Grabs an available command from the queue. Manages movement by counting the number of cycles
+    ///since last movment. This prefers movement over the top of the queue. SO basically
+    /// 
+    /// This checks the number of ticks, against a threshold. If it is greater or equal, and there is a
+    ///movement goal set, it will always do movement. Otherwise, it will increment ticks, and grab
+    ///the top command from the queue.
     fn get_command(&mut self) -> Option<String> {
     	let has_movement = match self.movement{
     		Some(_) =>  {true},
@@ -367,6 +407,7 @@ impl  MapUser {
     }
 }
 
+///This is just a screen object. It just holds and x,y and a tile.
 #[derive(Clone)]
 pub struct ScreenObject {
     pub tile: String,
@@ -375,6 +416,7 @@ pub struct ScreenObject {
 }
 
 impl ScreenObject {
+    ///Creates a new screen object with the given tile, x and y
 	fn new(tile: String, x: u8, y:u8) -> ScreenObject{
 		ScreenObject{
 			tile: tile,
@@ -384,12 +426,14 @@ impl ScreenObject {
 	}
 }
 
+///This struct just holds a tile
 #[derive(Clone)]
 pub struct ScreenTerrain {
     pub tile: String,
 }
 
 impl ScreenTerrain {
+    ///Creates a new tile struct
     fn new(tile: String) -> ScreenTerrain {
         ScreenTerrain {
             tile: tile,
@@ -397,6 +441,9 @@ impl ScreenTerrain {
     }
 }
 
+///Holds a vector of terrain objects, and a series of objects. The terrain is just a vector,
+///representing a 15x15 matrix. The screen objects on the other hand denote their x and y
+///specifically, rather than by their position in the array.
 #[derive(Clone)]
 pub struct MapScreen {
 	//15x15 vector. 
@@ -406,6 +453,9 @@ pub struct MapScreen {
 }
 
 impl MapScreen {
+    ///generates a new MapScreen based on the map and a given x & y. This will grab the 15x15
+    ///matrix centered on the given x and y. Any spaces beyond the boundaries of the map is replaced
+    ///with "empty" tiles
 	pub fn new(map: &GameMap, x: u32, y: u32) -> MapScreen {
         let startx: isize = x as isize -7;
         let starty: isize = y as isize -7;

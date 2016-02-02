@@ -29,8 +29,10 @@ use std::sync::Arc;
 use std::cell::RefCell;
 use std::sync::RwLock;
 
+/// This is the source for a MOBA server that is compatible with a preexisting game client. 
 
 fn main() {
+    //This section starts up a tcp socket listening on port 2222, per the client docs
     println!("starting");
     let addr: SocketAddr = "0.0.0.0:2222".parse().unwrap();
     println!("addr");
@@ -38,7 +40,7 @@ fn main() {
     println!("server");
     let mut event_loop = mio::EventLoop::new().unwrap();
     println!("event_loop"); 
-    event_loop.register(&server, SERVER).unwrap();
+    event_loop.register(&server, conn::server::SERVER).unwrap();
     println!("register");
 
     let mut moba = Server::new(server);

@@ -15,6 +15,11 @@ limitations under the License.*/
 
 use game::gamemap::MapScreen;
 
+/// This game module handles the API for the wyvern client. It only implements part of the API, as
+/// documented on the wyvern website. 
+///
+/// It also covers things like writing larger than 8 bit numbers to a u8 vector. (with varying
+/// endiannes, as described in the API)
 pub trait Api {
     fn write_header(vec: &mut Vec<u8>, code:u8, lenth:i32);
     fn write_string(vec: &mut Vec<u8>, string: &str);

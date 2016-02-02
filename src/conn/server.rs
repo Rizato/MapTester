@@ -38,15 +38,27 @@ use std::sync::Arc;
 use std::sync::mpsc::Sender;
 use std;
 
-//Setting the server as the first token
-const SERVER: mio::Token = mio::Token(0);
+/// This module contains all of the client facing code. It handles all of the MIO stuff, and user
+/// states and such.
+///
+/// There are two main structs here. Server & Connection. Server is of traight Handler, and
+/// implements the mio callbacks. Connection implements the client RPC API.
+///
+/// It also declares an enum to handle the connection state, and the Msg protocol used for comms
+/// between the connections and game loop.
 
+//Setting the server as the first token
+pub const SERVER: mio::Token = mio::Token(0);
+
+/// enum for the current state of the connection. Not Logged in, Logged in, and Closed.
 enum State {
     Closed,
 	NotLoggedIn,
 	LoggedIn,
 }
 
+/// enum for passing messages between connection & game loop. These are handled in the notify
+/// method of the mio Handler
 pub enum Msg {
 	Command(mio::Token, String),
     SendCommand(mio::Token, Sender<Msg>),
@@ -54,6 +66,8 @@ pub enum Msg {
     Screen(mio::Token, MapScreen)
 }
 
+/// This server maintain holds the tcp server, as well as a collection of all the current client
+/// collections. Additionally, it holds the main game struct.
 pub struct Server {
 	server: TcpListener,
 	//Tried removing the Arc here
@@ -62,6 +76,7 @@ pub struct Server {
 }
 
 impl Server {
+    /// Declares a new server with a tcp connection
 	pub fn new(tcp: TcpListener) -> Server {
 		let slab = Slab::new_starting_at(mio::Token(1), 1024);
 		Server {
@@ -76,6 +91,9 @@ impl mio::Handler for Server {
     type Timeout = ();
     type Message = Msg;
 
+    /// This function is the primary way the gameloop speaks to the clients. It sends a message on
+    /// the main channel, and this thing reads the message and figures out what to do, and who to send
+    /// it to.
     fn notify(&mut self, event_loop: &mut mio::EventLoop<Server>, msg: Self::Message) {
 		match msg {
 			Msg::TextOutput(token, result, message) => {
@@ -100,6 +118,8 @@ impl mio::Handler for Server {
 
 	fn ready(&mut self, event_loop: &mut mio::EventLoop<Server>, token: mio::Token, events: mio::EventSet){
 		match token {
+            //If this connection comes from the server, that means it is a new connection being
+            //opened
             SERVER => {
                 match self.server.accept() {
 			        Ok(Some(socket)) => {
@@ -123,7 +143,9 @@ impl mio::Handler for Server {
                 };
             },
 			_ => {
+                //otherwise, call the server's ready connection.
 				self.connections[token].ready(event_loop);
+                //if the connection has closed, remove it
 				if self.connections[token].is_closed() {
 					let _ = self.connections.remove(token);
 				}
@@ -132,6 +154,18 @@ impl mio::Handler for Server {
 	}
 }
 
+/// The connection implements some RPC protocol, as well as interfaces with the client. 
+///
+/// It basically keeps two queues. One for input and one for output. The input one is done anytime
+/// something comes from the user. The output comes from the notify method of the server. This can
+/// be triggered at any time, but when something is added to it, it will trigger a write out to the
+/// client.
+///
+/// It holds a reference to the game, so that it can grab a game loop and such. 
+///
+/// It also holds the player I guess. I don't actually think that will be the case in later
+/// versions. Player will be something created when the user connects. (Probably based on the class
+/// they select.)
 struct Connection {
     games: Arc<RefCell<Game>>,
 	socket: TcpStream,
@@ -355,6 +389,8 @@ impl Connection{
 	}
 }
 
+///Just implements the Api trait. This implementation is created from reading the web page that was
+///posted with all this information.
 impl Api for Connection {
     fn write_header(vec: &mut Vec<u8>, code:u8, length:i32) {
         vec.push(code);
