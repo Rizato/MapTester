@@ -16,13 +16,15 @@ limitations under the License.*/
 /// The player defines attributes such as the tile to represent the character,
 /// the health, mana pool, character name and speed
 
-use game::characters::Moveable;
+use game::characters::Controllable;
+use game::characters::Direction;
 use game::gamemap::GameMap;
 
 use std::collections::HashMap;
 use std::collections::HashSet;
 
 ///Defines the Player struct.
+#[derive(Clone)]
 pub struct Player{
     id: i64,
     pub tile: String,
@@ -30,6 +32,11 @@ pub struct Player{
     max_hp: i32,
     pub name: String,
     pub speed: u8,
+    //Coordinates (x, y). This is where the char is currently trying to move to. It has to be interpereted by the Map, and converted to an x, y relative to the actual map, not the user.
+    movement: Option<u32>,
+    movement_ticks: u8,
+    direction: Direction,
+    commands: Vec<String>,
 }
 
 impl Player {
@@ -43,6 +50,10 @@ impl Player {
             max_hp: 0,
             name: "empty".to_string(), 
             speed: 10,
+            commands: vec![],
+            direction: Direction::South,
+            movement: None,
+            movement_ticks: 0,
         }
     }
     
@@ -90,7 +101,7 @@ impl Player {
 }
 
 ///Implements the A* pathfinding algorithm for the player
-impl Moveable for Player {
+impl Controllable for Player {
     ///Computes the shortest path according to the A* algorithm. Gives the next step in the found path 
     fn path_next(map: &GameMap, start: u32, end: u32) -> Option<u32> {
         println!("Path!");
@@ -173,7 +184,7 @@ impl Moveable for Player {
     }
     
     ///Returns the found neighbors to a given index. Does one up, down, left and right.
-    fn find_neighbors(index: u32, map: &GameMap) -> Vec<u32>{
+    fn find_neighbors(index: u32, map: &GameMap) -> Vec<u32> {
         let width = map.width as u32;
         let x = index % width;
         let y = index / width;
@@ -197,5 +208,83 @@ impl Moveable for Player {
             }
         }
         neighbors
+    }
+    ///Pushes a command to the command queue for the mapuser
+    fn push_command(&mut self, command: String) {
+        self.commands.insert(0, command);
+    }
+    
+    ///Puts an absolute X, Y as the movement goal for this mapuser
+    fn set_movement(&mut self, end: u32) {
+        self.movement = Some(end);
+    }
+
+    ///Checks the end index against the movement goal index. If they are the same,
+    /// it wipes out the movement goalt.
+    fn clear_movement_if_at_destination(&mut self, end: u32) {
+        let replacement: Option<u32>  = match self.movement {
+            Some(e) => {
+                if e == end {
+                   None
+                } else {
+                    Some(e)
+                }
+            },
+            None => {None},
+        };
+        self.movement = replacement;
+    }
+    
+    ///Grabs an available command from the queue. Manages movement by counting the number of cycles
+    ///since last movment. This prefers movement over the top of the queue. SO basically
+    /// 
+    /// This checks the number of ticks, against a threshold. If it is greater or equal, and there is a
+    ///movement goal set, it will always do movement. Otherwise, it will increment ticks, and grab
+    ///the top command from the queue.
+    fn get_command(&mut self) -> Option<String> {
+        let has_movement = match self.movement{
+            Some(_) =>  {true},
+            None => {false},
+        };
+        if has_movement && self.movement_ticks >= self.speed /* *self.slow */ {
+            //The command returns the absolute location where the user wants to end up. The map knows it can only move 1 space towards that destination
+            let end = self.movement.unwrap();
+             self.movement_ticks = 0;
+             println!("got command {}", end);
+            Some(format!("end {}", end))
+        } else if self.commands.len() > 0 {
+            self.movement_ticks = if self.movement_ticks == 255 {
+                self.movement_ticks 
+            } else {
+                self.movement_ticks + 1
+            };
+            self.commands.pop()
+        } else {
+            self.movement_ticks = if self.movement_ticks == 255 {
+                self.movement_ticks 
+            } else {
+                self.movement_ticks + 1
+            };
+            None
+        }
+        
+    }
+    
+    fn get_tile(&self) -> String {
+        let direction = match self.direction {
+                                    Direction::South => {"S"},
+                                    Direction::North => {"N"},
+                                    Direction::East => {"E"},
+                                    Direction::West => {"W"},
+                                };
+        format!("{}{}",self.tile, direction)
+    }
+
+    fn does_move(&self) -> bool {
+        true
+    }
+
+    fn set_direction(&mut self, dir: Direction) {
+        self.direction = dir;
     }
 }

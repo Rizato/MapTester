@@ -15,7 +15,8 @@ limitations under the License.*/
 
 extern crate mio;
 
-use game::characters::Moveable;
+use game::characters::Controllable;
+use game::characters::Direction;
 use game::characters::player::Player;
 
 use std::sync::RwLock;
@@ -23,16 +24,6 @@ use std::sync::Arc;
 
 /// This module holds all the map related stuff. It has the GameMap itself, along with the
 /// MapScreen, ScreenObjects, 
-
-/// Enum for the direction that a moveable object just went. Gets sent to the connection when
-/// deciding what tile to draw.
-#[derive(Clone)]
-enum Direction {
-    North,
-    South,
-    East,
-    West,
-}
 
 ///This is the map. It holds all of the terratin, and all of the objects and such. 
 ///It also holds the x,y of the start value. This is only temporary until I get objects for start
@@ -99,12 +90,14 @@ impl GameMap {
 
     ///Grabs the MapTile at the given index
     fn get_user(&self, index: u32) -> MapTile {
+        println!("tile: {}", index);
         let mut tiles = self.tiles.read().unwrap();
         tiles[index as usize].clone()
     }
 
     ///Moves a user from one tile to another, replaces the direction witht he given direction
     fn move_user(&mut self, o:u32, n:u32, d: Direction) -> bool {
+        println!("Move user");
         //println!("{}", n);
         let old = self.get_user(o); 
         let mut tiles = self.tiles.write().unwrap();
@@ -114,9 +107,10 @@ impl GameMap {
                 false
             },
             None => {
+                println!("None");
                 let mut u = old.user.clone().unwrap();
                 u.clear_movement_if_at_destination(n);
-                u.direction = d.clone();
+                u.set_direction(d.clone());
                 new.user = Some(u);
                 new.blocked = true;
                 true
@@ -126,6 +120,7 @@ impl GameMap {
 
     /// Removes the tile at the given index
     fn wipe_user(&mut self, o: u32) {
+        println!("Wipe User");
         //TODO make sure the tile was not empty before (Cause if it was empty and was blocked it is
         //blocked by an object, and we don't want to unblock.
         let mut tiles = self.tiles.write().unwrap();
@@ -136,6 +131,7 @@ impl GameMap {
 
     /// Adds the command from the client to the user object
     pub fn push_command(&mut self, token: mio::Token, command: String) {
+        println!("push command");
         let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
         let start = y as u32 * self.width as u32+ x as u32;
         let mut tiles = self.tiles.write().unwrap();
@@ -221,6 +217,7 @@ impl GameMap {
             }
             match command {
                 Some(c) => {
+                    println!("Executing command");
                     match self.execute_command(t.unwrap(), c) {
                         Some(responses) => {
                             for x in 0..responses.len() {
@@ -239,6 +236,7 @@ impl GameMap {
     
     ///Executes a given command. Generates a possibly generates a vector of responses.
     fn execute_command(&mut self, token: mio::Token, command: String ) -> Option<Vec<(mio::Token, u8, String)>> {
+        println!("Execute Command");
         let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
         let index = y as u32 * self.width as u32 + x as u32;
         if command.starts_with("end") {
@@ -277,17 +275,19 @@ impl GameMap {
     
     /// This generates a new MapScreen based on the location of the given connection's user
     pub fn send_portion(&self, token: mio::Token) -> MapScreen {
+        println!("Send Portion");
         //This sends the squares around the user, which will always be centered in the screen.
         let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
         MapScreen::new(self, x, y)
     }
 
     /// Adds a player to the map. Puts it at the starting location.
-    pub fn add_player(&mut self, token: mio::Token, player: Arc<Player>) {
+    pub fn add_player(&mut self, token: mio::Token) {
+        println!("Add Player");
         //TODO Add match start.user None/Some & determine whether to add in a different location
         let mut tiles = self.tiles.write().unwrap();
         let ref mut start = tiles[(self.start_y * self.width + self.start_x) as usize];
-        start.user = Some(MapUser::new(token.clone(), player.clone()));
+        start.user = Some(MapUser::new(token.clone(), Commandable::P(Player::new())));
     }
 }
 
@@ -312,6 +312,11 @@ impl MapTile {
     }
 }
 
+#[derive(Clone)]
+pub enum Commandable {
+    P(Player),
+}
+
 ///Is a controllable thing on the map. Has a tile, which does not hold a direction(to be added
 ///later). It also holds a queue of directions, and the player object at the location. Lastly, it
 ///holds some movement helper values. That is, the final destination of the user initiated
@@ -319,91 +324,98 @@ impl MapTile {
 ///he player Speed value.
 #[derive(Clone)]
 pub struct MapUser{
-    player: Arc<Player>,
-    tile: String,
+    player: Commandable,
     token: mio::Token,
-    commands: Vec<String>,
-    direction: Direction,
-    //Coordinates (x, y). This is where the char is currently trying to move to. It has to be interpereted by the Map, and converted to an x, y relative to the actual map, not the user.
-    movement: Option<u32>,
-    movement_ticks: u8,
-     
 }
 
 impl  MapUser {
     ///This creates a new map user object, with some defaults. Takes in a player object and the
     ///token for the connection
-    fn new(token: mio::Token, player: Arc<Player>) -> MapUser {
+    fn new(token: mio::Token, player: Commandable) -> MapUser {
        MapUser {
             token: token, 
-            player: player.clone(),
-            tile: player.tile.clone(),
-            commands: vec![],
-            direction: Direction::South,
-            movement: None,
-            movement_ticks: 0,
+            player: player,
        }
     }
-    
-    ///Pushes a command to the command queue for the mapuser
-    fn push_command(&mut self, command: String) {
-        self.commands.insert(0, command);
+
+    fn does_move(&self) -> bool {
+        match self.player {
+            Commandable::P(ref player) => {
+                player.does_move()
+            },
+        }
     }
     
-    ///Puts an absolute X, Y as the movement goal for this mapuser
+    fn get_tile(&self) -> String {
+        match self.player {
+            Commandable::P(ref player) => {
+                player.get_tile()
+            }
+        }
+    }
+    
+    fn path_next(&self, map: &GameMap, start: u32, end: u32) -> Option<u32> {
+        match self.player {
+            Commandable::P(ref player) => {
+                Player::path_next(map, start, end)
+            }
+        }
+    }
+    ///This gives an estimate for the total, for use in the hueristic
+    fn hueristic(&self, width: u8, start: u32, end: u32) -> u32 {
+        match self.player {
+            Commandable::P(ref player) => {
+                Player::hueristic(width, start, end)
+            }
+        }
+    }
+    ///Returns a vector of indeices for valid neighbors
+    fn find_neighbors(&self, index: u32, map: &GameMap) -> Vec<u32> {
+        match self.player {
+            Commandable::P(ref player) => {
+                Player::find_neighbors(index, map)
+            }
+        }
+    }
+    ///Grabs the command
+    fn get_command(&mut self) -> Option<String> {
+        match self.player {
+            Commandable::P(ref mut player) => {
+                player.get_command()
+            }
+        }
+    }
+    ///Removes the movement value if there is one
+    fn clear_movement_if_at_destination(&mut self, end: u32) {
+        match self.player {
+            Commandable::P(ref mut player) => {
+                player.clear_movement_if_at_destination(end)
+            }
+        }
+    }
+    ///Sets a movement position for an object
     fn set_movement(&mut self, end: u32) {
-        self.movement = Some(end);
+        match self.player {
+            Commandable::P(ref mut player) => {
+                player.set_movement(end)
+            }
+        }
+    }
+    ///Adds a command to the queue
+    fn push_command(&mut self, command: String) {
+        match self.player {
+            Commandable::P(ref mut player) => {
+                player.push_command(command)
+            }
+        }
     }
 
-    ///Checks the end index against the movement goal index. If they are the same,
-    /// it wipes out the movement goalt.
-    fn clear_movement_if_at_destination(&mut self, end: u32) {
-        let replacement: Option<u32>  = match self.movement {
-            Some(e) => {
-                if e == end {
-                   None
-                } else {
-                    Some(e)
-                }
-            },
-            None => {None},
-        };
-        self.movement = replacement;
-    }
-    
-    ///Grabs an available command from the queue. Manages movement by counting the number of cycles
-    ///since last movment. This prefers movement over the top of the queue. SO basically
-    /// 
-    /// This checks the number of ticks, against a threshold. If it is greater or equal, and there is a
-    ///movement goal set, it will always do movement. Otherwise, it will increment ticks, and grab
-    ///the top command from the queue.
-    fn get_command(&mut self) -> Option<String> {
-        let has_movement = match self.movement{
-            Some(_) =>  {true},
-            None => {false},
-        };
-        if has_movement && self.movement_ticks >= self.player.speed /* *self.slow */ {
-            //The command returns the absolute location where the user wants to end up. The map knows it can only move 1 space towards that destination
-            let end = self.movement.unwrap();
-             self.movement_ticks = 0;
-             println!("got command {}", end);
-            Some(format!("end {}", end))
-        } else if self.commands.len() > 0 {
-            self.movement_ticks = if self.movement_ticks == 255 {
-                self.movement_ticks 
-            } else {
-                self.movement_ticks + 1
-            };
-            self.commands.pop()
-        } else {
-            self.movement_ticks = if self.movement_ticks == 255 {
-                self.movement_ticks 
-            } else {
-                self.movement_ticks + 1
-            };
-            None
+    fn set_direction(&mut self, direction: Direction) {
+        match self.player {
+            Commandable::P(ref mut player) => {
+                player.set_direction(direction)
+            }
         }
-        
     }
 }
 
@@ -476,14 +488,7 @@ impl MapScreen {
                         ter.push(ScreenTerrain::new(tile.tile.clone()));
                         match tile.user {
                             Some(u) => {
-                                let mut t_with_d = u.tile.clone();
-                                t_with_d.push_str(match u.direction {
-                                    Direction::South => {"S"},
-                                    Direction::North => {"N"},
-                                    Direction::East => {"E"},
-                                    Direction::West => {"W"},
-                                });
-                                obj.push(ScreenObject::new(t_with_d.clone(), (i-1) as u8, (j-1) as u8));
+                                obj.push(ScreenObject::new(u.get_tile(), (i-1) as u8, (j-1) as u8));
                             },
                             None => {},
                         }

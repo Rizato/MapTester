@@ -34,6 +34,7 @@ use std::sync::RwLock;
 use std::sync::Arc;
 
 use game::gamemap::GameMap;
+use game::gamemap::Commandable;
 use game::characters::player::Player;
 use conn::server::Msg;
 
@@ -77,8 +78,7 @@ impl GameLoop {
            loop {
                let mut threads = vec![];
                thread::sleep(Duration::from_millis(20));
-               //let screen_out = screen.clone();
-               //to_mio.send(Msg::Screen(mio::Token(1), screen_out));
+               println!("Creating conns");
                let mutex = connections.read().unwrap();
                for connection in mutex.iter(){ 
                    let s = send.clone();
@@ -93,6 +93,7 @@ impl GameLoop {
                }
                let mut map = game_map.write().unwrap();
                //This can cause DOS by keeping the commands from executing
+               println!("Reading commands");
                'outer: loop {
                    match recv.try_recv() {
                        Ok(Msg::Command(token, command)) => {
@@ -109,11 +110,13 @@ impl GameLoop {
                let responses = map.execute(&mutex);
                //Cannot seem to decontruct tuples in a loop. Doing the index version instead of
                //iterating
+               println!("Reading Responses");
                for i in 0..responses.len() {
                    let (token, style, response) = responses[i].clone();
                    to_mio.send(Msg::TextOutput(token, style, response));
                }
                //send map & health updates
+               println!("Sending map");
                for conn in mutex.iter() {
                    let screen = map.send_portion(conn.clone());
                    //Need to see response from sender
@@ -131,14 +134,15 @@ impl GameLoop {
                         },
                    }
                }
+               println!("Finished Loop");
            }
         });
     }
     
     ///Lets a connection join the game loop
-    pub fn join(&mut self, token: mio::Token, player: Arc<Player>) {
+    pub fn join(&mut self, token: mio::Token) {
         let mut conn = self.connections.write().unwrap();
-        self.game_map.write().unwrap().add_player(token.clone(), player);
+        self.game_map.write().unwrap().add_player(token.clone());
         conn.push(token);
     }
 }

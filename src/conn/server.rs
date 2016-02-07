@@ -19,7 +19,9 @@ extern crate time;
 use game::gamemap::MapScreen;
 use game::Game;
 use game::characters::player::Player;
+use game::gamemap::Commandable;
 use conn::api::Api;
+
 
 use mio::tcp::*;
 use mio::{TryRead, TryWrite};
@@ -169,7 +171,6 @@ impl mio::Handler for Server {
 struct Connection {
     games: Arc<RefCell<Game>>,
     socket: TcpStream,
-    player: Arc<Player>,
     token: mio::Token,
     to_client_queue: Vec<ByteBuf>,
     from_client_queue: Vec<String>,
@@ -179,11 +180,9 @@ struct Connection {
 
 impl Connection{
     fn new(games: Arc<RefCell<Game>>, socket: TcpStream, token: mio::Token) -> Connection {
-        let play = Arc::new(Player::new());
         Connection {
             games: games,
             socket: socket,
-            player: play,
             token: token,
             to_client_queue: vec![],
             from_client_queue: vec![],
@@ -353,7 +352,7 @@ impl Connection{
                         self.reregister_writable(event_loop);
                         println!("Writable");
                         let game_loop = self.games.borrow_mut().get_or_create_game_loop("map", event_loop);
-                        game_loop.borrow_mut().join(self.token.clone(), self.player.clone());
+                        game_loop.borrow_mut().join(self.token.clone());
                         println!("Looped");
                         //This is here only while it is a single user. Normally, these would be added to the game_loop, not set.
                         self.reregister_readable(event_loop);
@@ -466,6 +465,7 @@ impl Api for Connection {
     }
 
     fn write_timestamp(vec: &mut Vec<u8>) {
+        println!("Timestamp");
         let current = time::get_time();
         let mut milli = current.sec * 1000;
         milli = milli + (current.nsec as i64 / 1000000);
@@ -473,6 +473,7 @@ impl Api for Connection {
     }
 
     fn write_conn_result(&mut self, result: u8) {
+        println!("Conn Result");
         let mut conn: Vec<u8> = vec![];
         //connection result indication
         Connection::write_header(&mut conn, 2, 5);
@@ -491,6 +492,7 @@ impl Api for Connection {
     }
     
     fn write_quit(&mut self) {
+        println!("Quit");
         //quit indication
         let mut q: Vec<u8> = vec![];
         Connection::write_header(&mut q, 13, 0);
@@ -498,6 +500,7 @@ impl Api for Connection {
     }
     
     fn write_tile_mappings(&mut self) {
+        println!("Mappings");
         //Read map files. Write out entire output.
         let mut uncompressed: Vec<u8> = vec![];
         for (k, v) in self.games.borrow().mappings.iter() {
@@ -520,6 +523,7 @@ impl Api for Connection {
     }
 
     fn write_tile(&mut self, tile: i16) {
+        println!("WRite tile");
         let mut path = String::new();
         for (k, v) in self.games.borrow().mappings.iter() {
             if v.clone() == tile {
@@ -535,6 +539,7 @@ impl Api for Connection {
     }
     
     fn write_text_out(&mut self, style: u8, message: &str) {
+        println!("Text Out");
         let mut m: Vec<u8> = vec![];
         //text out byte
         Connection::write_header(&mut m, 11, (message.len()+3) as i32);
@@ -551,13 +556,16 @@ impl Api for Connection {
             let tile = self.games.borrow_mut().mappings.get(&terrain.tile).unwrap().clone();
             Connection::write_i32_reversed(&mut uncompressed, tile.clone() as i32);
         }
+        println!("Zipped screen");
         for object in screen.objects.iter() {
+            println!("Object! {}", object.tile);
             uncompressed.push(object.y);
             uncompressed.push(object.x);
             let tile = self.games.borrow_mut().mappings.get(&object.tile).unwrap().clone();
             //println!("{} {} {}", object.x, object.y, tile);
             Connection::write_i16_reversed(&mut uncompressed, tile.clone());
         }
+        println!("Zipped screen");
         let u_len = uncompressed.len();
         let mut compressed = Connection::zip_data(uncompressed);
         let z_len = compressed.len();
@@ -575,9 +583,11 @@ impl Api for Connection {
         //zipped contents
         s.append(&mut compressed);
         self.to_client_queue.insert(0, ByteBuf::from_slice(&s[..]));
+        println!("Zipped screen");
     }
 
     fn write_stat_name(&mut self, name: &str) {
+        println!("Name");
         let mut n = vec![];
         Connection::write_header(&mut n, 106, 2 + name.len() as i32);
         Connection::write_string(&mut n, name);
@@ -585,6 +595,7 @@ impl Api for Connection {
     }
 
     fn write_stat_gold(&mut self, gold: i32) {
+        println!("Write gold");
         let mut n = vec![];
         Connection::write_header(&mut n, 104, 4);
         Connection::write_i32(&mut n, gold);
@@ -592,6 +603,7 @@ impl Api for Connection {
     }
 
     fn write_stat_level(&mut self, level: u8, xp: i32) {
+        println!("WRite level");
         let mut n = vec![];
         Connection::write_header(&mut n, 105, 5);
         n.push(level);
@@ -601,6 +613,7 @@ impl Api for Connection {
 
     fn write_stat_all(&mut self, hp: i32, mhp: i32, sp: i32, msp: i32, level: i32, xp: i32, nxp:
                       i32, food: i32, mfood: i32) {
+        println!("WRITE STATS");
         let mut n = vec![];
         Connection::write_header(&mut n, 120, 36 );
         Connection::write_i32(&mut n, hp);
@@ -617,6 +630,7 @@ impl Api for Connection {
     }
     
     fn zip_data(data: Vec<u8> ) -> Vec<u8> {
+        println!("ZIP");
         let d = data.len();
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::Default);
         let mut written = 0;
