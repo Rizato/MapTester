@@ -42,10 +42,10 @@ pub struct Player{
 impl Player {
     ///Creates a new player. Defaults with the wizard tile, and a speed of 10 (1 movement every 20
     ///ms)
-    pub fn new() -> Player {
+    pub fn new(tile: String) -> Player {
         Player {
             id: 0,
-            tile: "players/wizard.".to_string(),
+            tile: format!("players/{}.",tile),
             hp: 0,
             max_hp: 0,
             name: "empty".to_string(), 

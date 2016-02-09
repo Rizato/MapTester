@@ -339,7 +339,7 @@ impl GameMap {
                 if command.starts_with("TowerShoot") {
                     let parts: Vec<&str> = command.split_whitespace().collect();
                     let t = parts[1].parse::<usize>().unwrap();
-                    Some(vec![(mio::Token::from_usize(t),5 ,"Tower has targeted you!".to_string())])
+                    Some(vec![(mio::Token::from_usize(t),3 ,"Tower has targeted you!".to_string())])
                 } else {
                     None
                 }
@@ -356,12 +356,12 @@ impl GameMap {
     }
 
     /// Adds a player to the map. Puts it at the starting location.
-    pub fn add_player(&mut self, token: mio::Token) {
+    pub fn add_player(&mut self, token: mio::Token, name:String) {
         println!("Add Player");
         //TODO Add match start.user None/Some & determine whether to add in a different location
         let mut tiles = self.tiles.write().unwrap();
         let ref mut start = tiles[self.start_y  as usize * self.width as usize + self.start_x as usize];
-        start.user = Some(MapUser::new(Some(token.clone()), Commandable::P(Player::new())));
+        start.user = Some(MapUser::new(Some(token.clone()), Commandable::P(Player::new(name))));
     }
 }
 

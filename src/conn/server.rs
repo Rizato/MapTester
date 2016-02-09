@@ -170,6 +170,7 @@ impl mio::Handler for Server {
 /// they select.)
 struct Connection {
     games: Arc<RefCell<Game>>,
+    name: String,
     socket: TcpStream,
     token: mio::Token,
     to_client_queue: Vec<ByteBuf>,
@@ -183,6 +184,7 @@ impl Connection{
         Connection {
             games: games,
             socket: socket,
+            name: "".to_string(),
             token: token,
             to_client_queue: vec![],
             from_client_queue: vec![],
@@ -325,6 +327,7 @@ impl Connection{
                         println!("height {}", height);
                         let name_len: usize= buf[8..].iter().take(2).fold(0usize, |sum, x| sum << 8 | *x as usize);
                         let name: &str = std::str::from_utf8(&buf[10..10+name_len]).unwrap();
+                        self.name = name.to_string();
                         println!("name {}", name);
                         let pw_len: usize= buf[10+name_len..].iter().take(2).fold(0usize, |sum, x| sum << 8 | *x as usize);
                         let pw: &str = std::str::from_utf8(&buf[12+name_len..12+name_len+pw_len]).unwrap();
@@ -352,7 +355,7 @@ impl Connection{
                         self.reregister_writable(event_loop);
                         println!("Writable");
                         let game_loop = self.games.borrow_mut().get_or_create_game_loop("map", event_loop);
-                        game_loop.borrow_mut().join(self.token.clone());
+                        game_loop.borrow_mut().join(self.token.clone(), self.name.clone());
                         println!("Looped");
                         //This is here only while it is a single user. Normally, these would be added to the game_loop, not set.
                         self.reregister_readable(event_loop);

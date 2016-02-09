@@ -140,9 +140,9 @@ impl GameLoop {
     }
     
     ///Lets a connection join the game loop
-    pub fn join(&mut self, token: mio::Token) {
+    pub fn join(&mut self, token: mio::Token, name: String) {
         let mut conn = self.connections.write().unwrap();
-        self.game_map.write().unwrap().add_player(token.clone());
+        self.game_map.write().unwrap().add_player(token.clone(), name);
         conn.push(token);
     }
 }
