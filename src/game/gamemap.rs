@@ -14,13 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.*/
 
 extern crate mio;
+extern crate slab;
 
 use game::characters::Controllable;
 use game::characters::Direction;
 use game::characters::player::Player;
+use game::characters::tower::Tower;
 
 use std::sync::RwLock;
 use std::sync::Arc;
+use self::slab::Index;
 
 /// This module holds all the map related stuff. It has the GameMap itself, along with the
 /// MapScreen, ScreenObjects, 
@@ -36,6 +39,7 @@ pub struct GameMap {
     //TODO This is temporary
     start_x: u8,
     start_y: u8, 
+    tower_index: u32,
 }
 
 impl GameMap {
@@ -72,12 +76,17 @@ impl GameMap {
         for _ in 0..100 {
             tiles.push(MapTile::new("terrain/carpet2".to_string()));
         }
+        
+        let t_index = 455;
+        tiles[t_index as usize].user = Some(MapUser::new(None,Commandable::T(Tower::new())));
         let mut ti = Arc::new(RwLock::new(tiles));
         let map = GameMap {
             width: 30,
             height: 30,
-            start_x: 15,
-            start_y: 8,
+            start_x: 29,
+            start_y: 15,
+            tower_index: t_index,
+            
             //Coordinates in tiles will simulate a 2d matrix, while actually being a 1d array.
             // Everything will be found by multiplying the width * y + x
             //   0  1  2  3  4  5  6  7
@@ -178,7 +187,7 @@ impl GameMap {
         for t in 0..len {
             match tiles[t as usize].user {
                 Some(ref u) => {
-                    if u.token == token {
+                    if u.token == Some(token) {
                        let y = (t as u32) / self.width as u32;
                        let x = (t as u32) % self.width as u32;
                        return Some((x, y));
@@ -199,26 +208,74 @@ impl GameMap {
         //Resolve any combat/damage
         //Add responses for action specific to players involved
         //return the vec
+        let x  = self.tower_index % self.width as u32;
+        let y  = self.tower_index / self.width as u32;
+        
+        //Pushing all tokens to the tower   
+        {
+            let mut players= vec![];
+            //Grabbing all of the players around the tower index
+            let mut tiles = self.tiles.write().unwrap();
+            let start_x = if x > 2 { x-2} else {0};
+            let end_x = if x +4 < self.width as u32 {x + 4} else {self.width as u32};
+            let start_y = if y > 2 { y-2} else {0};
+            let end_y = if y +4 < self.height  as u32 {y + 4} else {self.height as u32};
+            for i in start_x..end_x {
+                for j in start_y..end_y {
+                    let ref player = tiles[j  as usize * self.width as usize + i as usize];
+                    match player.user {
+                       Some(ref u) => {
+                           match u.token {
+                               Some(ref t) => {
+                                   &players.push(t.clone());
+                               },
+                               _ => {},
+                           }
+                        }, 
+                        _ => {},
+                    }
+                }
+            }
+            match tiles[self.tower_index as usize].user {
+                Some(ref mut user) => {
+                    match user.player {
+                        Commandable::T(ref mut tower) => {
+                            tower.push_tokens(players); 
+                        },
+                        _ => {},
+                    } 
+                },
+                _ => {},
+            };
+        }
         let mut retval = vec![];
-        for token in conns.iter() {
-            let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
-            let index = y * self.width as u32 + x;
+        for i in 0..900 {
+            let mut t = None;
             let mut command = None;
-            let mut t= None;
             {
-                let mut tile = self.tiles.write().unwrap();
-                command = match tile[index as usize].user {
-                    Some(ref mut u) => { 
-                        t = Some(u.token.clone());
-                        u.get_command() 
+                let mut tiles = self.tiles.write().unwrap();
+                command = match tiles[i].user {
+                    Some(ref mut user) => {
+                        t = user.token.clone();
+                        match user.player {
+                            Commandable::P(ref mut player) => {
+                                player.get_command()
+                            },
+                            Commandable::T(ref mut tower) => {
+                                tower.get_command()
+                            },
+                        }
                     },
-                    None => None,
+                    _ => { 
+                        None
+                    },
                 };
             }
+            //Executing each command
             match command {
                 Some(c) => {
                     println!("Executing command");
-                    match self.execute_command(t.unwrap(), c) {
+                    match self.execute_command(t, c) {
                         Some(responses) => {
                             for x in 0..responses.len() {
                                 let (token, style, response) = responses[x].clone();
@@ -235,41 +292,58 @@ impl GameMap {
     }
     
     ///Executes a given command. Generates a possibly generates a vector of responses.
-    fn execute_command(&mut self, token: mio::Token, command: String ) -> Option<Vec<(mio::Token, u8, String)>> {
+    fn execute_command(&mut self, token: Option<mio::Token>, command: String ) -> Option<Vec<(mio::Token, u8, String)>> {
         println!("Execute Command");
-        let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
-        let index = y as u32 * self.width as u32 + x as u32;
-        if command.starts_with("end") {
-            let parts: Vec<&str> = command.split_whitespace().collect();
-            let end = parts[1].parse::<u32>().unwrap();
-            println!("Execute path: {} {}", index, end);
-            let e = Player::path_next(&self, index.clone(), end);
-            match e {
-                Some(user_end) => {
-                    let dx = user_end % self.width as u32;
-                    let dy = user_end / self.width as u32;
-                    // Since the primary objective is east/west I will lean towards e/w when moving diagonally
-                    let mut dir = Direction::South;
-                    if dx > x as u32  {
-                        dir = Direction::East;
-                    } else if dx < x as u32 {
-                        dir = Direction::West;
-                    } else if dy < y as u32 {
-                        dir = Direction::North;
-                    } 
-                    if self.move_user(index.clone(), user_end, dir) {
-                        self.wipe_user(index);
+        match token {
+            Some(t) => {
+                let (x, y) = self.find_tile_with_token(t.clone()).unwrap();
+                let index = y as u32 * self.width as u32 + x as u32;
+                if command.starts_with("end") {
+                    let parts: Vec<&str> = command.split_whitespace().collect();
+                    let end = parts[1].parse::<u32>().unwrap();
+                    println!("Execute path: {} {}", index, end);
+                    let e = Player::path_next(&self, index.clone(), end);
+                    match e {
+                        Some(user_end) => {
+                            let dx = user_end % self.width as u32;
+                            let dy = user_end / self.width as u32;
+                            // Since the primary objective is east/west I will lean towards e/w when moving diagonally
+                            let mut dir = Direction::South;
+                            if dx > x as u32  {
+                                dir = Direction::East;
+                            } else if dx < x as u32 {
+                                dir = Direction::West;
+                            } else if dy < y as u32 {
+                                dir = Direction::North;
+                            } 
+                            if self.move_user(index.clone(), user_end, dir) {
+                                self.wipe_user(index);
+                            }
+                            None
+                        },
+                        None => {
+                            Some(vec![(t.clone(), 5,  "No Path Found".to_string()); 1])
+                        },
                     }
+                } else {
+                    //System message
+                    println!("{}", command);
+                    //Add a ball the map, at the index to the right of the tower.
+                    //Honestly, we are going to do it as a map user, cause I am not
+                    //completing this game, so no worries about it smashing into the wrong player
+                    //and the exception that would cause when the MapTile.user value is Some(_)
+                    Some(vec![(t.clone(), 5,  "Bad command".to_string()); 1])
+                }
+            },
+            None => {
+                if command.starts_with("TowerShoot") {
+                    let parts: Vec<&str> = command.split_whitespace().collect();
+                    let t = parts[1].parse::<usize>().unwrap();
+                    Some(vec![(mio::Token::from_usize(t),5 ,"Tower has targeted you!".to_string())])
+                } else {
                     None
-                },
-                None => {
-                    Some(vec![(token.clone(), 5,  "No Path Found".to_string()); 1])
-                },
+                }
             }
-        } else {
-            //System message
-            println!("{}", command);
-            Some(vec![(token.clone(), 5,  "Bad command".to_string()); 1])
         }
     }
     
@@ -286,8 +360,8 @@ impl GameMap {
         println!("Add Player");
         //TODO Add match start.user None/Some & determine whether to add in a different location
         let mut tiles = self.tiles.write().unwrap();
-        let ref mut start = tiles[(self.start_y * self.width + self.start_x) as usize];
-        start.user = Some(MapUser::new(token.clone(), Commandable::P(Player::new())));
+        let ref mut start = tiles[self.start_y  as usize * self.width as usize + self.start_x as usize];
+        start.user = Some(MapUser::new(Some(token.clone()), Commandable::P(Player::new())));
     }
 }
 
@@ -315,6 +389,7 @@ impl MapTile {
 #[derive(Clone)]
 pub enum Commandable {
     P(Player),
+    T(Tower),
 }
 
 ///Is a controllable thing on the map. Has a tile, which does not hold a direction(to be added
@@ -325,13 +400,13 @@ pub enum Commandable {
 #[derive(Clone)]
 pub struct MapUser{
     player: Commandable,
-    token: mio::Token,
+    token: Option<mio::Token>,
 }
 
 impl  MapUser {
     ///This creates a new map user object, with some defaults. Takes in a player object and the
     ///token for the connection
-    fn new(token: mio::Token, player: Commandable) -> MapUser {
+    fn new(token: Option<mio::Token>, player: Commandable) -> MapUser {
        MapUser {
             token: token, 
             player: player,
@@ -343,6 +418,9 @@ impl  MapUser {
             Commandable::P(ref player) => {
                 player.does_move()
             },
+            _ => {
+                false
+            },
         }
     }
     
@@ -350,14 +428,20 @@ impl  MapUser {
         match self.player {
             Commandable::P(ref player) => {
                 player.get_tile()
-            }
+            },
+            Commandable::T(ref tower) => {
+                tower.get_tile()
+            },
         }
     }
     
     fn path_next(&self, map: &GameMap, start: u32, end: u32) -> Option<u32> {
         match self.player {
-            Commandable::P(ref player) => {
+            Commandable::P(_) => {
                 Player::path_next(map, start, end)
+            },
+            _ => {
+                None
             }
         }
     }
@@ -366,6 +450,9 @@ impl  MapUser {
         match self.player {
             Commandable::P(ref player) => {
                 Player::hueristic(width, start, end)
+            },
+            _ => {
+                0
             }
         }
     }
@@ -374,14 +461,20 @@ impl  MapUser {
         match self.player {
             Commandable::P(ref player) => {
                 Player::find_neighbors(index, map)
+            },
+            _ => {
+                vec![]
             }
         }
     }
     ///Grabs the command
-    fn get_command(&mut self) -> Option<String> {
+    fn get_command(&mut self, index: u32) -> Option<String> {
         match self.player {
             Commandable::P(ref mut player) => {
                 player.get_command()
+            },
+            Commandable::T(ref mut tower) => {
+                tower.get_command()
             }
         }
     }
@@ -390,7 +483,8 @@ impl  MapUser {
         match self.player {
             Commandable::P(ref mut player) => {
                 player.clear_movement_if_at_destination(end)
-            }
+            },
+            _ => {},
         }
     }
     ///Sets a movement position for an object
@@ -398,7 +492,8 @@ impl  MapUser {
         match self.player {
             Commandable::P(ref mut player) => {
                 player.set_movement(end)
-            }
+            },
+            _ => {},
         }
     }
     ///Adds a command to the queue
@@ -406,7 +501,8 @@ impl  MapUser {
         match self.player {
             Commandable::P(ref mut player) => {
                 player.push_command(command)
-            }
+            },
+            _ => {},
         }
     }
 
@@ -414,7 +510,8 @@ impl  MapUser {
         match self.player {
             Commandable::P(ref mut player) => {
                 player.set_direction(direction)
-            }
+            },
+            _ => {},
         }
     }
 }

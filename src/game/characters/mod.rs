@@ -15,6 +15,7 @@ limitations under the License.*/
 /// This module just declares the Moveable trait. 
 
 pub mod player;
+pub mod tower;
 
 use game::gamemap::GameMap;
 
