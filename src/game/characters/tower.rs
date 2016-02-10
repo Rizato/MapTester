@@ -46,7 +46,7 @@ impl Tower {
             tile: "statics/soko_tower".to_string(),
             hp: 140,
             max_hp: 140, 
-            launch_speed: 10,
+            launch_speed: 200,
             launch_ticks: 0,
             target_priorities: HashMap::new(),
             last_priority: None,
@@ -76,12 +76,10 @@ impl Tower {
         for (token, total) in &self.target_priorities {
             if total > &max {
                 max = total.clone();
-                conn = Some(token.clone());
+                conn = Some(token.clone())
             }
         }
-        let retval = if self.last_priority == conn {None} else {conn};
-        self.last_priority = conn;
-        retval
+        conn
     }
     
     pub fn push_tokens(&mut self, tokens: Vec<mio::Token>) {

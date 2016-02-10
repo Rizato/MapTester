@@ -16,6 +16,7 @@ limitations under the License.*/
 
 pub mod player;
 pub mod tower;
+pub mod projectile;
 
 use game::gamemap::GameMap;
 
@@ -27,6 +28,10 @@ pub enum Direction {
     South,
     East,
     West,
+    NorthWest,
+    NorthEast,
+    SouthWest,
+    SouthEast,
 }
 
 ///This trait is used to define a set of functions for moveable objects. Helps with pathfinding.

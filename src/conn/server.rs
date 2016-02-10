@@ -115,8 +115,8 @@ impl mio::Handler for Server {
                 self.connections[token].send_command(send);
             },
             Msg::Hp(token, hp) => {
-            	self.connections[token].write_stat_all(hp, 200, 100, 100, 25, 1000000, 3000000, 6, 10);
-            	self.connections[token].reregister_writable(event_loop);
+                self.connections[token].write_stat_all(hp, 500, 100, 100, 25, 1000000, 3000000, 6, 10);
+                self.connections[token].reregister_writable(event_loop);
             }
             _ => {
                 panic!("Oh no!");
@@ -355,37 +355,37 @@ impl Connection{
                         self.write_tile_mappings();
                         println!("Adding items");
                         if self.name.starts_with("paladin") {
-                        	//Writing paladin specific stats
-                        	self.write_stat_name("Rizato the Paladin");
-                        	self.write_inv_add("Shield Of Reflection","sell", "armor/shield/shield_of_reflection", 0,0);
-                        	self.write_inv_add("Ring of Protection","sell", "magic/ring_emerald", 0,0);
-                        	self.write_inv_add("Crystal Platemail","sell", "armor/armor/crystal_platemail.1", 0,0);
-                        	//Writing pally spells
-                        	self.write_ground_add("R - Full Heal", "cast", "magic/reagent/clover", 0,0);
-                        	self.write_ground_add("E - Holy Wrath", "cast", "spells/holy_wrath.1", 0, 0);
-                        	self.write_ground_add("W - Flame Sword", "cast", "weapons/artifact/flaming_sword.1", 0, 0);
-                        	self.write_ground_add("Q - Magic Shield","cast", "armor/shield/magical_shield", 0,0);
+                            //Writing paladin specific stats
+                            self.write_stat_name("Rizato the Paladin");
+                            self.write_inv_add("Shield Of Reflection","sell", "armor/shield/shield_of_reflection", 0,0);
+                            self.write_inv_add("Ring of Protection","sell", "magic/ring_emerald", 0,0);
+                            self.write_inv_add("Crystal Platemail","sell", "armor/armor/crystal_platemail.1", 0,0);
+                            //Writing pally spells
+                            self.write_ground_add("R - Full Heal", "cast", "magic/reagent/clover", 0,0);
+                            self.write_ground_add("E - Holy Wrath", "cast", "spells/holy_wrath.1", 0, 0);
+                            self.write_ground_add("W - Flame Sword", "cast", "weapons/artifact/flaming_sword.1", 0, 0);
+                            self.write_ground_add("Q - Magic Shield","cast", "armor/shield/magical_shield", 0,0);
                         } else if self.name.starts_with("mage") {
-                        	self.write_stat_name("Cama the Arch Mage");
-                        	self.write_inv_add("Shirt of Fire","sell", "armor/armor/cloth_fire", 0,0);
-                        	self.write_inv_add("Ring of Fire","sell", "magic/ring_ruby", 0,0);
-                        	self.write_inv_add("Samhoc Crown","sell", "armor/helmet/samhoc_crown", 0,0);
-                        	self.write_inv_add("Wand of Power","sell", "magic/long_wand", 0,0);
-                        	//Writing pally spells
-                        	self.write_ground_add("R - Fireball", "cast", "spells/fireball/fireball_meteor.SE1", 0,0);
-                        	self.write_ground_add("E - Prismatic Shield", "cast", "spells/fireice.1", 0, 0);
-                        	self.write_ground_add("W - Curse", "cast", "spells/curse.1", 0, 0);
-                        	self.write_ground_add("Q - Fear","cast", "spells/fear.1", 0,0);
+                            self.write_stat_name("Cama the Arch Mage");
+                            self.write_inv_add("Shirt of Fire","sell", "armor/armor/cloth_fire", 0,0);
+                            self.write_inv_add("Ring of Fire","sell", "magic/ring_ruby", 0,0);
+                            self.write_inv_add("Samhoc Crown","sell", "armor/helmet/samhoc_crown", 0,0);
+                            self.write_inv_add("Wand of Power","sell", "magic/long_wand", 0,0);
+                            //Writing pally spells
+                            self.write_ground_add("R - Fireball", "cast", "spells/fireball/fireball_meteor.SE1", 0,0);
+                            self.write_ground_add("E - Prismatic Shield", "cast", "spells/fireice.1", 0, 0);
+                            self.write_ground_add("W - Curse", "cast", "spells/curse.1", 0, 0);
+                            self.write_ground_add("Q - Fear","cast", "spells/fear.1", 0,0);
                         } else if self.name.starts_with("panther_male") {
-                        	self.write_stat_name("Romin the Warrior");
-                        	self.write_inv_add("Claws","sell", "weapons/claws/knop/claws_hunter", 0,0);
-                        	self.write_inv_add("Black Dragon Mail","sell", "armor/armor/black_dragon_mail", 0,0);
-                        	self.write_inv_add("Lion Cloak","sell", "armor/cloak/lion_cloak", 0,0);
-                        	//Writing pally spells
-                        	self.write_ground_add("R - Triple Strike", "cast", "spells/death.1", 0,0);
-                        	self.write_ground_add("E - Swipe & Poison", "cast", "spells/poison/poison.1", 0, 0);
-                        	self.write_ground_add("W - Reveal", "cast", "spells/eyeball", 0, 0);
-                        	self.write_ground_add("Q - Fog","cast", "spells/fog/fog", 0,0);
+                            self.write_stat_name("Romin the Warrior");
+                            self.write_inv_add("Claws","sell", "weapons/claws/knop/claws_hunter", 0,0);
+                            self.write_inv_add("Black Dragon Mail","sell", "armor/armor/black_dragon_mail", 0,0);
+                            self.write_inv_add("Lion Cloak","sell", "armor/cloak/lion_cloak", 0,0);
+                            //Writing pally spells
+                            self.write_ground_add("R - Triple Strike", "cast", "spells/death.1", 0,0);
+                            self.write_ground_add("E - Swipe & Poison", "cast", "spells/poison/poison.1", 0, 0);
+                            self.write_ground_add("W - Reveal", "cast", "spells/eyeball", 0, 0);
+                            self.write_ground_add("Q - Fog","cast", "spells/fog/fog", 0,0);
                         }
                         
                         self.write_stat_gold(123456);
@@ -673,31 +673,31 @@ impl Api for Connection {
         
     }
                       
-	fn write_ground_add(&mut self, name: &str, commands: &str, tile_name: &str, index: i16, offsets: i16) {
-		println!("Write ground add {}", name);
-		let mut n = vec![];
-		Connection::write_header(&mut n, 80, (10 + name.len() + commands.len()) as i32);
-		let tile = self.games.borrow_mut().mappings.get(tile_name).unwrap().clone();
-		Connection::write_string(&mut n, name);
-		Connection::write_string(&mut n, commands);
-		Connection::write_i16(&mut n, tile);
-		Connection::write_i16(&mut n, index);
-		Connection::write_i16(&mut n, offsets);
-		self.to_client_queue.insert(0, ByteBuf::from_slice(&n[..]));
-	}
-	
-	fn write_inv_add(&mut self, name: &str, commands: &str, tile_name: &str, index: i16, offsets: i16) {
-		println!("Write inv add {}", name);
-		let mut n = vec![];
-		Connection::write_header(&mut n, 70, (10 + name.len() + commands.len()) as i32);
-		let tile = self.games.borrow_mut().mappings.get(tile_name).unwrap().clone();
-		Connection::write_string(&mut n, name);
-		Connection::write_string(&mut n, commands);
-		Connection::write_i16(&mut n, tile);
-		Connection::write_i16(&mut n, index);
-		Connection::write_i16(&mut n, offsets);
-		self.to_client_queue.insert(0, ByteBuf::from_slice(&n[..]));
-	}
+    fn write_ground_add(&mut self, name: &str, commands: &str, tile_name: &str, index: i16, offsets: i16) {
+        println!("Write ground add {}", name);
+        let mut n = vec![];
+        Connection::write_header(&mut n, 80, (10 + name.len() + commands.len()) as i32);
+        let tile = self.games.borrow_mut().mappings.get(tile_name).unwrap().clone();
+        Connection::write_string(&mut n, name);
+        Connection::write_string(&mut n, commands);
+        Connection::write_i16(&mut n, tile);
+        Connection::write_i16(&mut n, index);
+        Connection::write_i16(&mut n, offsets);
+        self.to_client_queue.insert(0, ByteBuf::from_slice(&n[..]));
+    }
+    
+    fn write_inv_add(&mut self, name: &str, commands: &str, tile_name: &str, index: i16, offsets: i16) {
+        println!("Write inv add {}", name);
+        let mut n = vec![];
+        Connection::write_header(&mut n, 70, (10 + name.len() + commands.len()) as i32);
+        let tile = self.games.borrow_mut().mappings.get(tile_name).unwrap().clone();
+        Connection::write_string(&mut n, name);
+        Connection::write_string(&mut n, commands);
+        Connection::write_i16(&mut n, tile);
+        Connection::write_i16(&mut n, index);
+        Connection::write_i16(&mut n, offsets);
+        self.to_client_queue.insert(0, ByteBuf::from_slice(&n[..]));
+    }
     
     fn zip_data(data: Vec<u8> ) -> Vec<u8> {
         println!("ZIP");

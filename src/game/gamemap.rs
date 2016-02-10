@@ -20,6 +20,7 @@ use game::characters::Controllable;
 use game::characters::Direction;
 use game::characters::player::Player;
 use game::characters::tower::Tower;
+use game::characters::projectile::Projectile;
 
 use std::sync::RwLock;
 use std::sync::Arc;
@@ -53,15 +54,15 @@ impl GameMap {
             tiles.push(MapTile::new("terrain/grass".to_string()));
         }
         for _ in 0..5 {
-        	for _ in 0..4 {
-	            tiles.push(MapTile::new("terrain/gray_brick".to_string()));
-        	}
-        	for _ in 0..22 {
-	            tiles.push(MapTile::new("terrain/dirt".to_string()));
-        	}
-        	for _ in 0..4 {
-            	tiles.push(MapTile::new("terrain/gray_brick".to_string()));
-        	}
+            for _ in 0..4 {
+                tiles.push(MapTile::new("terrain/gray_brick".to_string()));
+            }
+            for _ in 0..22 {
+                tiles.push(MapTile::new("terrain/dirt".to_string()));
+            }
+            for _ in 0..4 {
+                tiles.push(MapTile::new("terrain/gray_brick".to_string()));
+            }
         }
         for _ in 0..390 {
             tiles.push(MapTile::new("terrain/grass".to_string()));
@@ -126,6 +127,57 @@ impl GameMap {
         let ref mut old = tiles[o as usize];
         old.user = None;
         old.blocked = false;
+    }
+    
+    ///This just does the given damage to the users's health 
+    fn hurt_user(&mut self, token: mio::Token, damage: i32) {
+        let (x, y) = self.find_tile_with_token(token).unwrap();
+        let index = y as u32 * self.width as u32 + x as u32;
+        let mut tiles = self.tiles.write().unwrap();
+        match tiles[index as usize].user {
+            Some(ref mut user) => {
+                match user.player {
+                    Commandable::P(ref mut player) => {
+                        player.hurt(damage);
+                    },
+                    _ => {},
+                } 
+            },
+            _ => {},
+        };
+    
+        
+    }
+    
+    ///Moves a user from one tile to another, replaces the direction witht he given direction
+    fn move_projectile(&mut self, o:u32, n:u32, d: Direction) -> bool {
+        println!("Move user");
+        //println!("{}", n);
+        let old = self.get_user(o); 
+        let mut tiles = self.tiles.write().unwrap();
+        let ref mut new = tiles[n as usize];
+        match new.projectile {
+            Some(_) => {
+                false
+            },
+            None => {
+                println!("None");
+                let mut u = old.projectile.clone().unwrap();
+                u.set_direction(d.clone());
+                new.projectile = Some(u);
+                true
+            }
+        }
+    }
+
+    /// Removes the tile at the given index
+    fn wipe_projectile(&mut self, o: u32) {
+        println!("Wipe User");
+        //TODO make sure the tile was not empty before (Cause if it was empty and was blocked it is
+        //blocked by an object, and we don't want to unblock.
+        let mut tiles = self.tiles.write().unwrap();
+        let ref mut old = tiles[o as usize];
+        old.projectile = None;
     }
 
     /// Adds the command from the client to the user object
@@ -206,10 +258,10 @@ impl GameMap {
             let mut players= vec![];
             //Grabbing all of the players around the tower index
             let mut tiles = self.tiles.write().unwrap();
-            let start_x = if x > 2 { x-2} else {0};
-            let end_x = if x +4 < self.width as u32 {x + 4} else {self.width as u32};
-            let start_y = if y > 2 { y-2} else {0};
-            let end_y = if y +4 < self.height  as u32 {y + 4} else {self.height as u32};
+            let start_x = if x > 8 { x-8} else {0};
+            let end_x = if x +10 < self.width as u32 {x + 10} else {self.width as u32};
+            let start_y = if y > 8 { y-8} else {0};
+            let end_y = if y +10 < self.height  as u32 {y + 10} else {self.height as u32};
             for i in start_x..end_x {
                 for j in start_y..end_y {
                     let ref player = tiles[j  as usize * self.width as usize + i as usize];
@@ -239,10 +291,13 @@ impl GameMap {
             };
         }
         let mut retval = vec![];
+        //Looping through all tiles
         for i in 0..900 {
             let mut t = None;
             let mut command = None;
+            let mut projectile_command = None;
             {
+                //Gets the command the mapuser on this tile (if one exists)
                 let mut tiles = self.tiles.write().unwrap();
                 command = match tiles[i].user {
                     Some(ref mut user) => {
@@ -260,12 +315,35 @@ impl GameMap {
                         None
                     },
                 };
+                //gets the command for a projectile on this tile, if one exists
+                projectile_command = match tiles[i].projectile {
+                    Some(ref mut p) => {
+                        p.get_command(i as u32)
+                    },
+                    _ => {None},
+                };
             }
-            //Executing each command
+            //Executing command from player or tower
             match command {
                 Some(c) => {
                     println!("Executing command");
                     match self.execute_command(t, c) {
+                        Some(responses) => {
+                            for x in 0..responses.len() {
+                                let (token, style, response) = responses[x].clone();
+                                retval.push((token, style, response));
+                            }
+                        },
+                        None => {},
+                    };
+                },
+                None => {},
+            }
+            //executing command from projectile
+            match projectile_command {
+                Some(c) => {
+                    println!("command {}", c);
+                    match self.execute_command(None, c) {
                         Some(responses) => {
                             for x in 0..responses.len() {
                                 let (token, style, response) = responses[x].clone();
@@ -318,18 +396,68 @@ impl GameMap {
                 } else {
                     //System message
                     println!("{}", command);
-                    //Add a ball the map, at the index to the right of the tower.
-                    //Honestly, we are going to do it as a map user, cause I am not
-                    //completing this game, so no worries about it smashing into the wrong player
-                    //and the exception that would cause when the MapTile.user value is Some(_)
                     Some(vec![(t.clone(), 5,  "Bad command".to_string()); 1])
                 }
             },
             None => {
+                //Command from tower. Picks a target to shoot. Creates a new projectile
                 if command.starts_with("TowerShoot") {
                     let parts: Vec<&str> = command.split_whitespace().collect();
                     let t = parts[1].parse::<usize>().unwrap();
-                    Some(vec![(mio::Token::from_usize(t),3 ,"Tower has targeted you!".to_string())])
+                    let conn = mio::Token::from_usize(t);
+                    let mut tiles = self.tiles.write().unwrap();
+                    tiles[406].projectile = Some(Projectile::new(conn.clone()));
+                    Some(vec![(conn,3 ,"Tower has fired on you!".to_string())])
+                    //Moves the projectile located at the given index, towards the user with the given token
+                } else if command.starts_with("ProjectileFindAndTrack") {
+                    println!("Projectile Should be moving");
+                    //This whole projectile thing is horrible. Absolutely horrible.
+                    //I am just trying to get it demo-able though. So quick here we come.
+                    let parts: Vec<&str> = command.split_whitespace().collect();
+                    let start = parts[1].parse::<u32>().unwrap();
+                    let x = start % self.width as u32;
+                    let y = start / self.width as u32;
+                    let t = parts[2].parse::<usize>().unwrap();
+                    let conn = mio::Token::from_usize(t);
+                    let (end_x, end_y) = self.find_tile_with_token(conn.clone()).unwrap();
+                    let index = end_y as u32 * self.width as u32 + end_x as u32;
+                    println!("Start: {}, end: {}", start, index);
+                    let next = Projectile::path_next(self, start.clone(), index);
+                    match next {
+                        Some(i) => {
+                        println!("Next: {}", i);
+                            if index == i {
+                                self.hurt_user(conn.clone(), 50);
+                                self.wipe_projectile(start);
+                                Some(vec![(conn, 3, "Projectile smashed into you".to_string()); 1])
+                            } else {
+                                let dx = i % self.width as u32;
+                                let dy = i / self.width as u32;
+                                // Since the primary objective is east/west I will lean towards e/w when moving diagonally
+                                let mut dir = Direction::South;
+                                if dx > x && dy == y   {
+                                    dir = Direction::East;
+                                } else if dx < x && dy == y {
+                                    dir = Direction::West;
+                                } else if dx > x && dy > y {
+                                    dir = Direction::SouthEast;
+                                } else if dx > x && dy < y {
+                                    dir = Direction::NorthEast;
+                                }  else if dx < x && dy > y {
+                                    dir = Direction::SouthWest;
+                                } else if dx < x && dy < y {
+                                    dir = Direction::NorthWest;
+                                } else if dy < y && dx == x {
+                                    dir = Direction::North;
+                                } 
+                                if self.move_projectile(start.clone(), i, dir) {
+                                    self.wipe_projectile(start);
+                                }
+                                None
+                            }
+                        },
+                        _ => {None},
+                    }
                 } else {
                     None
                 }
@@ -339,23 +467,23 @@ impl GameMap {
     
     /// This pulls the HP from health. 
     pub fn get_hp(&self, token: mio::Token) -> Option<i32> {
-    	let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
-    	let tiles = self.tiles.read().unwrap();
+        let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
+        let tiles = self.tiles.read().unwrap();
         let ref tile = tiles[y  as usize * self.width as usize + x as usize];
         match tile.user {
-        	Some(ref user) => {
+            Some(ref user) => {
                 match user.player {
-                 	Commandable::P(ref player) => {
-                  		Some(player.hp as i32)
+                    Commandable::P(ref player) => {
+                        Some(player.hp as i32)
                     },
                     _ => {
-                    	None
-                	},
-        		}
+                        None
+                    },
+                }
             },
-        	_ => {
-        	None
-        	},
+            _ => {
+            None
+            },
         }
     }
     
@@ -385,6 +513,7 @@ pub struct MapTile{
     tile: String,
     pub user: Option<MapUser>,
     pub blocked: bool,
+    pub projectile: Option<Projectile>,
     //TODO add a Vec<MapItem>
 }
 
@@ -394,6 +523,7 @@ impl MapTile {
             tile: tile,
             user: None,
             blocked: false,
+            projectile: None,
         }
     }
 }
@@ -600,6 +730,13 @@ impl MapScreen {
                                 obj.push(ScreenObject::new(u.get_tile(), (i-1) as u8, (j-1) as u8));
                             },
                             None => {},
+                        }
+                        match tile.projectile {
+                            Some(p) => {
+                                obj.push(ScreenObject::new(p.get_tile(), (i-1) as u8, (j-1) as u8));
+                            },
+                            None => {},
+
                         }
                     } else {
                         ter.push(empty.clone());

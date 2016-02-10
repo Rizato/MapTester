@@ -16,6 +16,8 @@ limitations under the License.*/
 /// The player defines attributes such as the tile to represent the character,
 /// the health, mana pool, character name and speed
 
+extern crate mio;
+
 use game::characters::Controllable;
 use game::characters::Direction;
 use game::gamemap::GameMap;
@@ -23,43 +25,29 @@ use game::gamemap::GameMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-///Defines the Player struct.
+///Defines the Projectile struct.
 #[derive(Clone)]
-pub struct Player{
-    id: i64,
+pub struct Projectile{
     pub tile: String,
-    pub hp: i32,
-    max_hp: i32,
-    pub name: String,
     pub speed: u8,
-    //Coordinates (x, y). This is where the char is currently trying to move to. It has to be interpereted by the Map, and converted to an x, y relative to the actual map, not the user.
-    movement: Option<u32>,
+    pub target: mio::Token,
+    index: u32,
     movement_ticks: u8,
     direction: Direction,
-    commands: Vec<String>,
 }
 
-impl Player {
+impl Projectile {
     ///Creates a new player. Defaults with the wizard tile, and a speed of 10 (1 movement every 20
     ///ms)
-    pub fn new(tile: String) -> Player {
-        Player {
-            id: 0,
-            tile: format!("players/{}.",tile),
-            hp: 500,
-            max_hp: 500,
-            name: "empty".to_string(), 
-            speed: 10,
-            commands: vec![],
+    pub fn new(token: mio::Token) -> Projectile {
+        Projectile {
+            tile: "misc/white_ball".to_string(),
+            speed: 5,
+            index: 406,
             direction: Direction::South,
-            movement: None,
+            target: token,
             movement_ticks: 0,
         }
-    }
-    
-    ///This function subtracts from the hp of the player
-    pub fn hurt(&mut self, damage: i32) {
-        self.hp = if self.hp > damage {self.hp - damage} else {self.max_hp};
     }
     
     ///This is an assisting function for moveable and the A* algorithm. It basically just tries to
@@ -103,12 +91,9 @@ impl Player {
         //println!("actual {} {}", x, y);
         current
     }
-}
 
-///Implements the A* pathfinding algorithm for the player
-impl Controllable for Player {
     ///Computes the shortest path according to the A* algorithm. Gives the next step in the found path 
-    fn path_next(map: &GameMap, start: u32, end: u32) -> Option<u32> {
+    pub fn path_next(map: &GameMap, start: u32, end: u32) -> Option<u32> {
         //println!("Path!");
         //A* algorithm
         let mut closed = HashSet::new();
@@ -122,19 +107,19 @@ impl Controllable for Player {
         let mut score_from:HashMap<u32, u32> = HashMap::new();
         score_from.insert(start.clone(), 0);
         let mut estimate_to: HashMap<u32, u32> = HashMap::new();
-        estimate_to.insert(start.clone(), Player::hueristic(map.width.clone(), start.clone(), end.clone()));
+        estimate_to.insert(start.clone(), Projectile::hueristic(map.width.clone(), start.clone(), end.clone()));
         while open.len() > 0 {
             //Grab start with the smallest estimate
-            let current = Player::lowest_estimate(&open, &mut estimate_to);
+            let current = Projectile::lowest_estimate(&open, &mut estimate_to);
             if current == end {
                 //return the index of the first move 
-                //println!("Finished! {} {}", current, end);
-                return Some(Player::find_move(&path, end.clone()));
+                println!("Finished! {} {}", current, end);
+                return Some(Projectile::find_move(&path, end.clone()));
             }
             open.remove(&current);
             closed.insert(current.clone());
             //Need to figure out how to get all neighbors
-            let neighbors = Player::find_neighbors(current, map);
+            let neighbors = Projectile::find_neighbors(current, map);
             for neighbor in neighbors.iter() {
                 //println!("Neighbor {}", neighbor);
                 if closed.contains(neighbor) {
@@ -148,7 +133,7 @@ impl Controllable for Player {
                     open.insert(neighbor.clone());
                     score_from.insert(neighbor.clone(), possible_score.clone()); 
                     //println!("possible score {}", possible_score);
-                    estimate_to.insert(neighbor.clone(),  possible_score + Player::hueristic(map.width.clone(), neighbor.clone(), end.clone()));    
+                    estimate_to.insert(neighbor.clone(),  possible_score + Projectile::hueristic(map.width.clone(), neighbor.clone(), end.clone()));    
                 } else {
                     match score_from.clone().get_mut(neighbor) {
                         Some(ref mut value) => {
@@ -158,13 +143,13 @@ impl Controllable for Player {
                                 let mut n = path.entry(neighbor.clone()).or_insert(current.clone());
                                 *n = current.clone();
                                 score_from.insert(neighbor.clone(), possible_score.clone());
-                                estimate_to.insert(neighbor.clone(),  possible_score + Player::hueristic(map.width.clone(), neighbor.clone(), end.clone()));    
+                                estimate_to.insert(neighbor.clone(),  possible_score + Projectile::hueristic(map.width.clone(), neighbor.clone(), end.clone()));    
                             }
                         },
                         None => {
                             path.insert(neighbor.clone(), current);
                             score_from.insert(neighbor.clone(), possible_score.clone());
-                            estimate_to.insert(neighbor.clone(),possible_score + Player::hueristic(map.width.clone(), neighbor.clone(), end.clone()));
+                            estimate_to.insert(neighbor.clone(),possible_score + Projectile::hueristic(map.width.clone(), neighbor.clone(), end.clone()));
                         },
                     }
                 }
@@ -196,9 +181,6 @@ impl Controllable for Player {
         let mut neighbors = vec![];
         for dx in 0..3 {
             for dy in 0..3 {
-                if dy == dx || (dx == 0 && dy == 2) || (dx == 2 && dy == 0)  {
-                    continue;
-                }
                 let current_x = (x as i32) + (dx as i32) -1;
                 let current_y = (y as i32) + (dy as i32) -1;
                 if current_x >=0 && current_y >=0 {
@@ -207,11 +189,7 @@ impl Controllable for Player {
                     }
                     let i = (current_y as u32) * width as u32 + (current_x as u32);
                     //println!("neighbor {}", i);
-                    //if not blocked, add to neighbors
-                    let tiles = map.tiles.read().unwrap();
-                    if !tiles[i as usize].blocked {
-                        neighbors.push(i.clone());
-                    }
+                    neighbors.push(i.clone());
                 }
             }
         }
@@ -219,28 +197,15 @@ impl Controllable for Player {
     }
     ///Pushes a command to the command queue for the mapuser
     fn push_command(&mut self, command: String) {
-        self.commands.insert(0, command);
     }
     
     ///Puts an absolute X, Y as the movement goal for this mapuser
     fn set_movement(&mut self, end: u32) {
-        self.movement = Some(end);
     }
 
     ///Checks the end index against the movement goal index. If they are the same,
     /// it wipes out the movement goalt.
     fn clear_movement_if_at_destination(&mut self, end: u32) {
-        let replacement: Option<u32>  = match self.movement {
-            Some(e) => {
-                if e == end {
-                   None
-                } else {
-                    Some(e)
-                }
-            },
-            None => {None},
-        };
-        self.movement = replacement;
     }
     
     ///Grabs an available command from the queue. Manages movement by counting the number of cycles
@@ -249,51 +214,37 @@ impl Controllable for Player {
     /// This checks the number of ticks, against a threshold. If it is greater or equal, and there is a
     ///movement goal set, it will always do movement. Otherwise, it will increment ticks, and grab
     ///the top command from the queue.
-    fn get_command(&mut self) -> Option<String> {
-        let has_movement = match self.movement{
-            Some(_) =>  {true},
-            None => {false},
-        };
-        if has_movement && self.movement_ticks >= self.speed /* *self.slow */ {
-            //The command returns the absolute location where the user wants to end up. The map knows it can only move 1 space towards that destination
-            let end = self.movement.unwrap();
-             self.movement_ticks = 0;
-             //println!("got command {}", end);
-            Some(format!("end {}", end))
-        } else if self.commands.len() > 0 {
-            self.movement_ticks = if self.movement_ticks == 255 {
-                self.movement_ticks 
-            } else {
-                self.movement_ticks + 1
-            };
-            self.commands.pop()
+    pub fn get_command(&mut self, index: u32) -> Option<String> {
+        self.index = index;
+        if self.movement_ticks >= self.speed {
+            self.movement_ticks = 0;
+            Some(format!("ProjectileFindAndTrack {} {}", self.index, self.target.as_usize())) 
         } else {
-            self.movement_ticks = if self.movement_ticks == 255 {
-                self.movement_ticks 
-            } else {
-                self.movement_ticks + 1
-            };
+            self.movement_ticks = if self.movement_ticks == 255 {255} else {self.movement_ticks+1};
             None
         }
-        
     }
     
-    fn get_tile(&self) -> String {
+    pub fn get_tile(&self) -> String {
         let direction = match self.direction {
                                     Direction::South => {"S"},
                                     Direction::North => {"N"},
                                     Direction::East => {"E"},
                                     Direction::West => {"W"},
-                                    _ => {"S"},
+                                    Direction::NorthWest => {"NW"},
+                                    Direction::NorthEast => {"NE"},
+                                    Direction::SouthWest => {"SW"},
+                                    Direction::SouthEast => {"SE"},
                                 };
-        format!("{}{}",self.tile, direction)
+        //format!("{}{}1",self.tile, direction)
+        format!("{}",self.tile)
     }
 
     fn does_move(&self) -> bool {
         true
     }
 
-    fn set_direction(&mut self, dir: Direction) {
+    pub fn set_direction(&mut self, dir: Direction) {
         self.direction = dir;
     }
 }
