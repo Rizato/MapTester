@@ -118,6 +118,10 @@ impl GameLoop {
                //send map & health updates
                println!("Sending map");
                for conn in mutex.iter() {
+                   let hp = map.get_hp(conn.clone());
+                   if hp.is_some() {
+                       to_mio.send(Msg::Hp(conn.clone(), hp.unwrap()));
+                   }
                    let screen = map.send_portion(conn.clone());
                    //Need to see response from sender
                    match to_mio.send(Msg::Screen(conn.clone(), screen.clone())) {

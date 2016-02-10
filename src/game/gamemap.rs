@@ -49,35 +49,25 @@ impl GameMap {
         //TODO Load map from file use ProtocolBuffers.
         let mut tiles: Vec<MapTile> = vec![];
         //Just doing a fake thing really quick.
-        for _ in 0..100 {
-            tiles.push(MapTile::new("terrain/aspens".to_string()));
+        for _ in 0..360 {
+            tiles.push(MapTile::new("terrain/grass".to_string()));
         }
-        for _ in 0..100 {
-            tiles.push(MapTile::new("terrain/beach".to_string()));
+        for _ in 0..5 {
+        	for _ in 0..4 {
+	            tiles.push(MapTile::new("terrain/gray_brick".to_string()));
+        	}
+        	for _ in 0..22 {
+	            tiles.push(MapTile::new("terrain/dirt".to_string()));
+        	}
+        	for _ in 0..4 {
+            	tiles.push(MapTile::new("terrain/gray_brick".to_string()));
+        	}
         }
-        for _ in 0..100 {
-            tiles.push(MapTile::new("terrain/blue_tile".to_string()));
-        }
-        for _ in 0..100 {
-            tiles.push(MapTile::new("terrain/brick1".to_string()));
-        }
-        for _ in 0..100 {
-            tiles.push(MapTile::new("terrain/brick2".to_string()));
-        }
-        for _ in 0..100 {
-            tiles.push(MapTile::new("terrain/brick3".to_string()));
-        }
-        for _ in 0..100 {
-            tiles.push(MapTile::new("terrain/brick4".to_string()));
-        }
-        for _ in 0..100 {
-            tiles.push(MapTile::new("terrain/carpet1".to_string()));
-        }
-        for _ in 0..100 {
-            tiles.push(MapTile::new("terrain/carpet2".to_string()));
+        for _ in 0..390 {
+            tiles.push(MapTile::new("terrain/grass".to_string()));
         }
         
-        let t_index = 455;
+        let t_index = 405;
         tiles[t_index as usize].user = Some(MapUser::new(None,Commandable::T(Tower::new())));
         let mut ti = Arc::new(RwLock::new(tiles));
         let map = GameMap {
@@ -344,6 +334,28 @@ impl GameMap {
                     None
                 }
             }
+        }
+    }
+    
+    /// This pulls the HP from health. 
+    pub fn get_hp(&self, token: mio::Token) -> Option<i32> {
+    	let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
+    	let tiles = self.tiles.read().unwrap();
+        let ref tile = tiles[y  as usize * self.width as usize + x as usize];
+        match tile.user {
+        	Some(ref user) => {
+                match user.player {
+                 	Commandable::P(ref player) => {
+                  		Some(player.hp as i32)
+                    },
+                    _ => {
+                    	None
+                	},
+        		}
+            },
+        	_ => {
+        	None
+        	},
         }
     }
     

@@ -40,5 +40,7 @@ pub trait Api {
     fn write_stat_level(&mut self,level: u8, xp: i32);
     fn write_stat_all(&mut self, hp: i32, mhp: i32, sp: i32, msp: i32, level: i32, xp: i32, nxp:
                       i32, food: i32, mfood: i32);
+    fn write_ground_add(&mut self, name: &str, commands: &str, tile: &str, index: i16, offsets: i16);
+    fn write_inv_add(&mut self, name: &str, commands: &str, tile: &str, index: i16, offsets: i16);
     fn zip_data(data: Vec<u8>) -> Vec<u8>;
 }

@@ -28,7 +28,7 @@ use std::collections::HashSet;
 pub struct Player{
     id: i64,
     pub tile: String,
-    hp: i32,
+    pub hp: i32,
     max_hp: i32,
     pub name: String,
     pub speed: u8,
@@ -46,8 +46,8 @@ impl Player {
         Player {
             id: 0,
             tile: format!("players/{}.",tile),
-            hp: 0,
-            max_hp: 0,
+            hp: 200,
+            max_hp: 200,
             name: "empty".to_string(), 
             speed: 10,
             commands: vec![],
