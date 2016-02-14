@@ -272,8 +272,12 @@ impl Connection{
                         if n >= 2+ length {
                             let command = std::str::from_utf8(&read[2..2+length]).unwrap();
                             if command.starts_with("#tile") {
-                                let tile: i16 = command.split(" ").next().unwrap().parse().unwrap();
-                                self.write_tile(tile);
+                                match command.split(" ").next().unwrap().parse() {
+                                    Ok(tile) => {
+                                        self.write_tile(tile);
+                                    },
+                                    _ => {},
+                                }
                             } else {
                                 self.from_client_queue.push(command.to_string());
                             }
@@ -609,17 +613,30 @@ impl Api for Connection {
         //Convert MapScreen to zipped screen.
         let mut uncompressed: Vec<u8> = vec![];
         for terrain in screen.terrain.iter() {
-            let tile = self.games.borrow_mut().mappings.get(&terrain.tile).unwrap().clone();
-            Connection::write_i32_reversed(&mut uncompressed, tile.clone() as i32);
+            match self.games.borrow_mut().mappings.get(&terrain.tile) {
+                Some(tile) => {
+                    Connection::write_i32_reversed(&mut uncompressed, tile.clone() as i32);
+                },
+                None => {
+                    //Writing an invalid tile so it just shows the dot pattern
+                    Connection::write_i32_reversed(&mut uncompressed, 9999);
+                },
+            }
         }
         println!("Zipped screen");
         for object in screen.objects.iter() {
             println!("Object! {}", object.tile);
             uncompressed.push(object.y);
             uncompressed.push(object.x);
-            let tile = self.games.borrow_mut().mappings.get(&object.tile).unwrap().clone();
-            //println!("{} {} {}", object.x, object.y, tile);
-            Connection::write_i16_reversed(&mut uncompressed, tile.clone());
+            match self.games.borrow_mut().mappings.get(&object.tile) {
+                Some(tile) => {
+                    Connection::write_i16_reversed(&mut uncompressed, tile.clone() as i16);
+                },
+                None => {
+                    //Writing an invalid tile so it just shows the dot pattern
+                    Connection::write_i16_reversed(&mut uncompressed, 9999);
+                },
+            }
         }
         println!("Zipped screen");
         let u_len = uncompressed.len();
