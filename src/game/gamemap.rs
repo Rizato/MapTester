@@ -75,7 +75,7 @@ impl GameMap {
             width: 30,
             height: 30,
             start_x: 29,
-            start_y: 15,
+            start_y: 14,
             tower_index: t_index,
             
             //Coordinates in tiles will simulate a 2d matrix, while actually being a 1d array.
@@ -498,10 +498,54 @@ impl GameMap {
     /// Adds a player to the map. Puts it at the starting location.
     pub fn add_player(&mut self, token: mio::Token, name:String) {
         println!("Add Player");
-        //TODO Add match start.user None/Some & determine whether to add in a different location
+        let sx = self.start_x.clone();
+        let sy = self.start_y.clone();
+        self.add_player_at(MapUser::new(Some(token.clone()), Commandable::P(Player::new(name))),
+        sx, sy);
+    }
+
+    ///Recursively searches for an open location. Sadly this is a horrible algorithm, and will build characters
+    ///all in one direction before it tries any of the others. Ugly.
+    fn add_player_at(&mut self, user: MapUser, x: u8, y: u8) -> bool {
+        let mut start_user = None;
+        {
+            let mut tiles = self.tiles.write().unwrap();
+            let ref mut start = tiles[y  as usize * self.width as usize + x as usize];
+            start_user = start.user.clone();
+        }
+        if x >= 0 && x < self.width && y >=0 && y < self.height {
+            match start_user {
+               None => {
+                    println!("Open tile at {} {}", x, y);
+                    let mut tiles = self.tiles.write().unwrap();
+                    let ref mut start = tiles[y  as usize * self.width as usize + x as usize];
+                    start.user = Some(user);
+                    true
+               },
+               Some(_) => {
+                   if x == 0 && y > 0 {
+                       self.add_player_at(user.clone(), x+1, y) || self.add_player_at(user.clone(), x, y-1) || self.add_player_at(user.clone(), x, y+1)
+                   } else if x == 0 && y == 0 {
+                       self.add_player_at(user.clone(), x+1, y) || self.add_player_at(user.clone(), x, y+1)
+                   } else if x > 0 && y == 0 {
+                       self.add_player_at(user.clone(), x-1, y) ||  self.add_player_at(user.clone(), x+1, y) || self.add_player_at(user.clone(), x, y+1)
+                   } else {
+                       self.add_player_at(user.clone(), x-1, y) ||  self.add_player_at(user.clone(), x+1, y) || self.add_player_at(user.clone(), x, y-1) || self.add_player_at(user.clone(), x, y+1)
+                   }
+               },
+            }
+        } else {
+            false
+        }
+    }
+
+    /// Removes a player from the map. 
+    pub fn remove_player(&mut self, token: mio::Token) {
+        println!("Remove Player");
+        let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
         let mut tiles = self.tiles.write().unwrap();
-        let ref mut start = tiles[self.start_y  as usize * self.width as usize + self.start_x as usize];
-        start.user = Some(MapUser::new(Some(token.clone()), Commandable::P(Player::new(name))));
+        let index = y as usize * self.width as usize + x as usize; 
+        tiles[index].user = None;
     }
 }
 

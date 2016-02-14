@@ -41,8 +41,8 @@ impl Projectile {
     ///ms)
     pub fn new(token: mio::Token) -> Projectile {
         Projectile {
-            tile: "misc/white_ball".to_string(),
-            speed: 5,
+            tile: "spells/blizzard/snowball_meteor.".to_string(),
+            speed: 10,
             index: 406,
             direction: Direction::South,
             target: token,
@@ -236,8 +236,8 @@ impl Projectile {
                                     Direction::SouthWest => {"SW"},
                                     Direction::SouthEast => {"SE"},
                                 };
-        //format!("{}{}1",self.tile, direction)
-        format!("{}",self.tile)
+        format!("{}{}1",self.tile, direction)
+        //format!("{}",self.tile)
     }
 
     fn does_move(&self) -> bool {

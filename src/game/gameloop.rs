@@ -149,4 +149,16 @@ impl GameLoop {
         self.game_map.write().unwrap().add_player(token.clone(), name);
         conn.push(token);
     }
+
+    pub fn remove(&mut self, token : mio::Token) {
+        let mut conn = self.connections.write().unwrap();
+        self.game_map.write().unwrap().remove_player(token.clone());
+        //TODO must remove object, not token
+        for i in 0..conn.len() {
+            if conn[i] == token {
+                conn.remove(i);
+                break;
+            }
+        }
+    }
 }

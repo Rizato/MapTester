@@ -49,7 +49,7 @@ impl Player {
             hp: 500,
             max_hp: 500,
             name: "empty".to_string(), 
-            speed: 10,
+            speed: 20,
             commands: vec![],
             direction: Direction::South,
             movement: None,

@@ -152,10 +152,17 @@ impl mio::Handler for Server {
             },
             _ => {
                 //otherwise, call the server's ready connection.
-                self.connections[token].ready(event_loop);
-                //if the connection has closed, remove it
-                if self.connections[token].is_closed() {
+                if events.is_hup() {
+                    {
+                        self.connections[token].quit(event_loop);
+                    }
                     let _ = self.connections.remove(token);
+                } else {
+                    self.connections[token].ready(event_loop);
+                    //if the connection has closed, remove it
+                    if self.connections[token].is_closed() {
+                        let _ = self.connections.remove(token);
+                    }
                 }
             },
         }
@@ -215,6 +222,11 @@ impl Connection{
             let command = self.from_client_queue.pop().unwrap();
             send.send(Msg::Command(self.token.clone(), command));
         }
+    }
+
+    fn quit(&mut self, event_loop: &mut mio::EventLoop<Server>) {
+        let game_loop = self.games.borrow_mut().get_or_create_game_loop("map", event_loop);
+        game_loop.borrow_mut().remove(self.token.clone());
     }
     
     fn ready(&mut self, event_loop: &mut mio::EventLoop<Server>){
