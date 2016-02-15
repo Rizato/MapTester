@@ -545,7 +545,9 @@ impl GameMap {
         let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
         let mut tiles = self.tiles.write().unwrap();
         let index = y as usize * self.width as usize + x as usize; 
-        tiles[index].user = None;
+        let ref mut t = tiles[index];
+        t.user = None;
+        t.blocked = false;
     }
 }
 

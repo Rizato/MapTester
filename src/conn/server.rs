@@ -15,6 +15,7 @@ limitations under the License.*/
 
 extern crate mio;
 extern crate time;
+extern crate slab;
 
 use game::gamemap::MapScreen;
 use game::Game;
@@ -28,6 +29,7 @@ use mio::{TryRead, TryWrite};
 use mio::util::Slab;
 use mio::buf::ByteBuf;
 use mio::buf::Buf;
+use self::slab::Index;
 
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
@@ -65,6 +67,7 @@ pub enum Msg {
     Command(mio::Token, String),
     SendCommand(mio::Token, Sender<Msg>),
     TextOutput(mio::Token, u8, String),
+    Shout(String),
     Screen(mio::Token, MapScreen),
     Hp(mio::Token, i32),
 }
@@ -101,23 +104,49 @@ impl mio::Handler for Server {
         match msg {
             Msg::TextOutput(token, result, message) => {
                 // Write message
-                self.connections[token].write_text_out(result, &message);
-                self.connections[token].reregister_writable(event_loop);
+                if self.connections.contains(token) {
+                    self.connections[token].write_text_out(result, &message);
+                }
+                if self.connections.contains(token) {
+                    self.connections[token].reregister_writable(event_loop);
+                }
             },
             Msg::Screen(token, screen) => {
                 //Write screen
-                self.connections[token].write_zipped_screen(screen);
-                self.connections[token].reregister_writable(event_loop);
+                if self.connections.contains(token) {
+                    self.connections[token].write_zipped_screen(screen);
+                }
+                if self.connections.contains(token) {
+                    self.connections[token].reregister_writable(event_loop);
+                }
             },
             Msg::SendCommand(token, send) => {
                 //Tell it to send a command
                 //TODO Revamp this. We should not send this but once.
-                self.connections[token].send_command(send);
+                if self.connections.contains(token) {
+                    self.connections[token].send_command(send);
+                }
             },
             Msg::Hp(token, hp) => {
-                self.connections[token].write_stat_all(hp, 500, 100, 100, 25, 1000000, 3000000, 6, 10);
-                self.connections[token].reregister_writable(event_loop);
-            }
+                if self.connections.contains(token) {
+                    self.connections[token].write_stat_all(hp, 500, 100, 100, 25, 1000000, 3000000, 6, 10);
+                }
+                if self.connections.contains(token) {
+                    self.connections[token].reregister_writable(event_loop);
+                }
+            },
+            Msg::Shout(msg) => {
+                let mut tokens = vec![];
+                for t in self.connections.iter() {
+                    if t.token.as_usize() != 0 {
+                        tokens.push(t.token);
+                    }
+                }
+                for token in tokens {
+                   self.connections[token].write_text_out(4,&msg); 
+                   self.connections[token].reregister_writable(event_loop);
+                }
+            },
             _ => {
                 panic!("Oh no!");
             }
@@ -278,6 +307,13 @@ impl Connection{
                                     },
                                     _ => {},
                                 }
+                            } else if command.starts_with("shout ") {
+                                let (ref a, ref msg) = command.split_at(6);
+                                let mut m = format!("{} shouts: {} ", self.name, msg).to_string();
+                                //Doing this the trivially easy way, just doing a notification for
+                                //that gets pushed to everyone
+                                let send = event_loop.channel();
+                                send.send(Msg::Shout(m));
                             } else {
                                 self.from_client_queue.push(command.to_string());
                             }
@@ -339,6 +375,18 @@ impl Connection{
                 //Login
                 //1 int (4), 2 short (2x2), 3 utf (3x3) = 17
                 if n >= 17 {
+                    //On Linux apparently it is capped at 64. I just assume there is more data to
+                    //add, but carry on either way
+                    if n == 64 {
+                        let mut rest: Vec<u8> = vec![];
+                        match self.socket.try_read_buf(&mut rest) {
+                            Ok(Some(0)) => {},
+                            Ok(Some(_)) => {
+                                buf.extend_from_slice(&rest[..]);
+                            },
+                            _ => {},
+                        }
+                    }
                     //Modify this to use take.
                     let first_value: i32 = buf[..].iter().take(4).fold(0i32, |sum, x| sum  << 8 | *x as i32);
                     if first_value == 1 {
@@ -356,8 +404,9 @@ impl Connection{
                         println!("pw {}", pw);
                         let version_len: usize= buf[12+name_len+pw_len..].iter().take(2).fold(0usize, |sum, x| sum << 8 | *x as usize);
                         println!("Remanining {} Version {}", 16+name_len+pw_len, version_len);
+                        //Hoping that it can't double send. Cause that'll produce weird results
                         let version: &str =
-                            std::str::from_utf8(&buf[14+name_len+pw_len..14+name_len+pw_len+version_len]).unwrap();
+                            std::str::from_utf8(&buf[14+name_len+pw_len..]).unwrap();
                         println!("version {}", version);
                         println!("game_loop");
                         //Change to state logged in

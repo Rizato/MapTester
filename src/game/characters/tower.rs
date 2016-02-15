@@ -88,7 +88,7 @@ impl Tower {
             if tokens.contains(&conn) {
                 let total = self.target_priorities.get(&conn).unwrap().clone();
                 println!("Total {} conn {}" , total, conn.as_usize());
-                temp.insert(conn.clone(), total +1);
+                temp.insert(conn.clone(), if total >= 100000 {total} else {total +1});
             } 
         }
         self.target_priorities = temp.clone();
