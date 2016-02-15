@@ -284,13 +284,13 @@ impl Connection{
     }
     
     fn readable(&mut self, event_loop: &mut mio::EventLoop<Server>) {
-        let mut read = vec![];
+        let mut read = Vec::with_capacity(4096);
         match self.socket.try_read_buf(&mut read) {
             Ok(Some(0)) => {
                 self.reregister_readable(event_loop);
             },
             Ok(Some(mut n)) => {
-                //println!("Read {}", n);
+                println!("Read {}", n);
                 //Read strings. Write to game_loop
                 loop {
                     if n >= 3 {
@@ -307,7 +307,8 @@ impl Connection{
                                     },
                                     _ => {},
                                 }
-                            } else if command.starts_with("shout ") {
+                            } else if command.starts_with("shout ") && command.len() > 6 {
+
                                 let (ref a, ref msg) = command.split_at(6);
                                 let mut m = format!("{} shouts: {} ", self.name, msg).to_string();
                                 //Doing this the trivially easy way, just doing a notification for
@@ -365,7 +366,7 @@ impl Connection{
     
     fn login(&mut self, event_loop: &mut mio::EventLoop<Server>) {
         //Do Login stuff
-        let mut buf:Vec<u8> = vec![];
+        let mut buf:Vec<u8> = Vec::with_capacity(150);
         match self.socket.try_read_buf(&mut buf) {
             Ok(Some(0)) => {
                         self.write_conn_result(4);
@@ -375,18 +376,6 @@ impl Connection{
                 //Login
                 //1 int (4), 2 short (2x2), 3 utf (3x3) = 17
                 if n >= 17 {
-                    //On Linux apparently it is capped at 64. I just assume there is more data to
-                    //add, but carry on either way
-                    if n == 64 {
-                        let mut rest: Vec<u8> = vec![];
-                        match self.socket.try_read_buf(&mut rest) {
-                            Ok(Some(0)) => {},
-                            Ok(Some(_)) => {
-                                buf.extend_from_slice(&rest[..]);
-                            },
-                            _ => {},
-                        }
-                    }
                     //Modify this to use take.
                     let first_value: i32 = buf[..].iter().take(4).fold(0i32, |sum, x| sum  << 8 | *x as i32);
                     if first_value == 1 {
