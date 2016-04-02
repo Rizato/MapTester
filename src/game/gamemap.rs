@@ -70,6 +70,7 @@ impl GameMap {
         
         let t_index = 405;
         tiles[t_index as usize].user = Some(MapUser::new(None,Commandable::T(Tower::new())));
+        tiles[t_index as usize].blocked = true;
         let mut ti = Arc::new(RwLock::new(tiles));
         let map = GameMap {
             width: 30,
@@ -102,19 +103,23 @@ impl GameMap {
         let old = self.get_user(o); 
         let mut tiles = self.tiles.write().unwrap();
         let ref mut new = tiles[n as usize];
-        match new.user {
-            Some(_) => {
-                false
-            },
-            None => {
-                println!("None");
-                let mut u = old.user.clone().unwrap();
-                u.clear_movement_if_at_destination(n);
-                u.set_direction(d.clone());
-                new.user = Some(u);
-                new.blocked = true;
-                true
+        if !new.blocked {
+            match new.user {
+                Some(_) => {
+                    false
+                },
+                None => {
+                    println!("None");
+                    let mut u = old.user.clone().unwrap();
+                    u.clear_movement_if_at_destination(n);
+                    u.set_direction(d.clone());
+                    new.user = Some(u);
+                    new.blocked = true;
+                    true
+                }
             }
+        } else {
+            false
         }
     }
 
@@ -224,7 +229,9 @@ impl GameMap {
 
     /// Returns the x,y value of a token
     fn find_tile_with_token(&self, token: mio::Token) -> Option<(u32, u32)> {
+        println!("Finding Tiles");
         let tiles = self.tiles.read().unwrap();
+        println!("Found Tiles!");
         let len = tiles.len();
         for t in 0..len {
             match tiles[t as usize].user {
@@ -467,32 +474,44 @@ impl GameMap {
     
     /// This pulls the HP from health. 
     pub fn get_hp(&self, token: mio::Token) -> Option<i32> {
-        let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
-        let tiles = self.tiles.read().unwrap();
-        let ref tile = tiles[y  as usize * self.width as usize + x as usize];
-        match tile.user {
-            Some(ref user) => {
-                match user.player {
-                    Commandable::P(ref player) => {
-                        Some(player.hp as i32)
+        match self.find_tile_with_token(token.clone()) {
+            Some((x,y)) => {
+                let tiles = self.tiles.read().unwrap();
+                let ref tile = tiles[y  as usize * self.width as usize + x as usize];
+                match tile.user {
+                    Some(ref user) => {
+                        match user.player {
+                            Commandable::P(ref player) => {
+                                Some(player.hp as i32)
+                            },
+                            _ => {
+                                None
+                            },
+                        }
                     },
                     _ => {
-                        None
+                    None
                     },
                 }
             },
-            _ => {
-            None
+            None=> { 
+                None
             },
         }
     }
     
     /// This generates a new MapScreen based on the location of the given connection's user
-    pub fn send_portion(&self, token: mio::Token) -> MapScreen {
+    pub fn send_portion(&self, token: mio::Token) -> Option<MapScreen> {
         println!("Send Portion");
         //This sends the squares around the user, which will always be centered in the screen.
-        let (x, y) = self.find_tile_with_token(token.clone()).unwrap();
-        MapScreen::new(self, x, y)
+        match self.find_tile_with_token(token.clone()) {
+            Some((x, y)) => {
+                Some(MapScreen::new(self, x, y))
+            },
+            None => {
+                None
+            },
+        }
     }
 
     /// Adds a player to the map. Puts it at the starting location.
@@ -501,42 +520,89 @@ impl GameMap {
         let sx = self.start_x.clone();
         let sy = self.start_y.clone();
         self.add_player_at(MapUser::new(Some(token.clone()), Commandable::P(Player::new(name))),
-        sx, sy);
+        sx, sy, Direction::All);
     }
 
     ///Recursively searches for an open location. Sadly this is a horrible algorithm, and will build characters
-    ///all in one direction before it tries any of the others. Ugly.
-    fn add_player_at(&mut self, user: MapUser, x: u8, y: u8) -> bool {
+    ///all in one direction before it tries any of the others. Ugly. What really kills it is that
+    ///it exectures on the game loop & stops everything while it searches. If the x direction is
+    ///full, it will take forever.
+    fn add_player_at(&mut self, user: MapUser, x: u8, y: u8, direction: Direction) -> bool {
         let mut start_user = None;
-        {
-            let mut tiles = self.tiles.write().unwrap();
-            let ref mut start = tiles[y  as usize * self.width as usize + x as usize];
-            start_user = start.user.clone();
-        }
+        let mut blocked = false;
         if x >= 0 && x < self.width && y >=0 && y < self.height {
-            match start_user {
-               None => {
-                    println!("Open tile at {} {}", x, y);
-                    let mut tiles = self.tiles.write().unwrap();
-                    let ref mut start = tiles[y  as usize * self.width as usize + x as usize];
-                    start.user = Some(user);
-                    true
-               },
-               Some(_) => {
-                   if x == 0 && y > 0 {
-                       self.add_player_at(user.clone(), x+1, y) || self.add_player_at(user.clone(), x, y-1) || self.add_player_at(user.clone(), x, y+1)
-                   } else if x == 0 && y == 0 {
-                       self.add_player_at(user.clone(), x+1, y) || self.add_player_at(user.clone(), x, y+1)
-                   } else if x > 0 && y == 0 {
-                       self.add_player_at(user.clone(), x-1, y) ||  self.add_player_at(user.clone(), x+1, y) || self.add_player_at(user.clone(), x, y+1)
-                   } else {
-                       self.add_player_at(user.clone(), x-1, y) ||  self.add_player_at(user.clone(), x+1, y) || self.add_player_at(user.clone(), x, y-1) || self.add_player_at(user.clone(), x, y+1)
-                   }
-               },
+            {
+                let mut tiles = self.tiles.write().unwrap();
+                let ref mut start = tiles[y  as usize * self.width as usize + x as usize];
+                start_user = start.user.clone();
+                blocked = start.blocked;
+            }
+            if !blocked {
+                match start_user {
+                   None => {
+                        println!("Open tile at {} {}", x, y);
+                        let mut tiles = self.tiles.write().unwrap();
+                        let ref mut start = tiles[y  as usize * self.width as usize + x as usize];
+                        start.user = Some(user);
+                        start.blocked = true;
+                        true
+                   },
+                   Some(_) => {
+                       match direction {
+                            Direction::All => { 
+                                (x > 0 && self.add_player_at(user.clone(), x-1, y, Direction::West))
+                                    ||  self.add_player_at(user.clone(), x+1, y, Direction::East) 
+                                    || (y > 0 && self.add_player_at(user.clone(), x, y-1, Direction::North))
+                                    || self.add_player_at(user.clone(), x, y+1, Direction::South)
+                            },
+                            Direction::East=> { 
+                                 self.add_player_at(user.clone(), x + 1, y, Direction::East)
+                            },
+                            Direction::West=> { 
+                                 x > 0 && self.add_player_at(user.clone(), x - 1, y, Direction::West)
+                                
+                            },
+                            Direction::South=> { 
+                                 self.add_player_at(user.clone(), x, y+1, Direction::South)
+                            },
+                            Direction::North=> { 
+                                y > 0 && self.add_player_at(user.clone(), x, y-1, Direction::North)
+                            },
+                            _ => {
+                                false
+                            },
+                       }
+                   },
+                }
+            } else {
+                match direction {
+                     Direction::All => { 
+                             (x > 0 && self.add_player_at(user.clone(), x-1, y, Direction::West)) 
+                             ||  self.add_player_at(user.clone(), x+1, y, Direction::East) 
+                             || (y > 0 && self.add_player_at(user.clone(), x, y-1, Direction::North))
+                             || self.add_player_at(user.clone(), x, y+1, Direction::South)
+                     },
+                     Direction::East=> { 
+                          self.add_player_at(user.clone(), x + 1, y, Direction::East)
+                     },
+                     Direction::West=> { 
+                          x > 0 && self.add_player_at(user.clone(), x - 1, y, Direction::West)
+                     },
+                     Direction::South=> { 
+                          self.add_player_at(user.clone(), x, y+1, Direction::South)
+                     },
+                     Direction::North=> { 
+                          y > 0 && self.add_player_at(user.clone(), x, y-1, Direction::North)
+                     },
+                     _ => {
+                         false
+                     },
+                }
             }
         } else {
             false
         }
+        
     }
 
     /// Removes a player from the map. 

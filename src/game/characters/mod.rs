@@ -24,6 +24,7 @@ use game::gamemap::GameMap;
 /// deciding what tile to draw.
 #[derive(Clone)]
 pub enum Direction {
+    All,
     North,
     South,
     East,

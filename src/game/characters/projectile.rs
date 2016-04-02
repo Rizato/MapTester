@@ -235,6 +235,7 @@ impl Projectile {
                                     Direction::NorthEast => {"NE"},
                                     Direction::SouthWest => {"SW"},
                                     Direction::SouthEast => {"SE"},
+                                    _ => {"S"},
                                 };
         format!("{}{}1",self.tile, direction)
         //format!("{}",self.tile)

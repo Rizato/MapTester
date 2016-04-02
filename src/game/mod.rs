@@ -28,6 +28,7 @@ use std::sync::Arc;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::BufReader;
+use std::sync::mpsc::{channel, Sender};
 
 use game::gameloop::GameLoop;
 use conn::server::{Server, Msg};
@@ -38,11 +39,12 @@ use conn::server::{Server, Msg};
 pub struct Game {
     game_loops: HashMap<String, Arc<RefCell<GameLoop>>>,
     pub mappings: HashMap<String, i16>,
+    pub send: Sender<Msg>,
 }
 
 impl Game {
     ///Creates a new game struct. Initilizes a new hashmap, and reads the tile map file.
-    pub fn new() -> Game {
+    pub fn new(send: Sender<Msg>) -> Game {
         let mut m: HashMap<String,i16> = HashMap::new();  
         let tile_file = File::open("file_full").unwrap(); 
         let mut reader = BufReader::new(tile_file);
@@ -56,18 +58,17 @@ impl Game {
         Game {
             game_loops: HashMap::new(),
             mappings: m,
+            send: send,
         }
     }
 
     ///Creates a new game loop with the given name, or finds it already in the hashmap. Starts the
     ///game loop if the map is created.
-    pub fn get_or_create_game_loop(&mut self, map_name: &str, event_loop: &mut mio::EventLoop<Server>) -> Arc<RefCell<GameLoop>> {
+    pub fn get_or_create_game_loop(&mut self, map_name: &str) -> Arc<RefCell<GameLoop>> {
         println!("{}", map_name);
         //This can handle all kinds of things. Checks last time user was inside, if too long it recreates. 
         //Checks the hashmap for the Gameloop. If not there, it creates a new one, adds it and returns it.
-        let send = event_loop.channel();
-        let _ = send.send(Msg::TextOutput(mio::Token(1), 2, "test".to_string()));
-        let game_loop = self.game_loops.entry(map_name.to_string()).or_insert(Arc::new(RefCell::new(GameLoop::new(map_name, send))));
+        let game_loop = self.game_loops.entry(map_name.to_string()).or_insert(Arc::new(RefCell::new(GameLoop::new(map_name, self.send.clone()))));
         game_loop.clone()
     }
 }

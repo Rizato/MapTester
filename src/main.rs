@@ -42,7 +42,7 @@ fn main() {
     println!("event_loop"); 
     event_loop.register(&server, conn::server::SERVER).unwrap();
     println!("register");
-
+    event_loop.timeout_ms(conn::server::TIMEOUT, 1).unwrap();
     let mut moba = Server::new(server);
     let _ = event_loop.run(&mut moba).unwrap();
 }

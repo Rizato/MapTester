@@ -39,7 +39,7 @@ use std::cell::RefCell;
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::Arc;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Sender, Receiver, channel};
 use std;
 
 /// This module contains all of the client facing code. It handles all of the MIO stuff, and user
@@ -53,6 +53,7 @@ use std;
 
 //Setting the server as the first token
 pub const SERVER: mio::Token = mio::Token(0);
+pub const TIMEOUT: mio::Token = mio::Token(1);
 
 /// enum for the current state of the connection. Not Logged in, Logged in, and Closed.
 enum State {
@@ -79,78 +80,84 @@ pub struct Server {
     //Tried removing the Arc here
     connections: Slab<Connection>,
     games: Arc<RefCell<Game>>,
+    recv: Receiver<Msg>,
+    send: Sender<Msg>,
 }
 
 impl Server {
     /// Declares a new server with a tcp connection
     pub fn new(tcp: TcpListener) -> Server {
-        let slab = Slab::new_starting_at(mio::Token(1), 1024);
+        let slab = Slab::new_starting_at(mio::Token(2), 1024);
+        let (s, r) = channel::<Msg>();
         Server {
             server: tcp,
             connections: slab,
-            games: Arc::new(RefCell::new(Game::new())),
+            games: Arc::new(RefCell::new(Game::new(s.clone()))),
+            send: s,
+            recv: r,
         }
     }
 }
 
 impl mio::Handler for Server {
-    type Timeout = ();
-    type Message = Msg;
+    type Timeout = mio::Token;
+    type Message = ();
 
-    /// This function is the primary way the gameloop speaks to the clients. It sends a message on
-    /// the main channel, and this thing reads the message and figures out what to do, and who to send
-    /// it to.
-    fn notify(&mut self, event_loop: &mut mio::EventLoop<Server>, msg: Self::Message) {
-        match msg {
-            Msg::TextOutput(token, result, message) => {
-                // Write message
-                if self.connections.contains(token) {
-                    self.connections[token].write_text_out(result, &message);
-                }
-                if self.connections.contains(token) {
-                    self.connections[token].reregister_writable(event_loop);
-                }
-            },
-            Msg::Screen(token, screen) => {
-                //Write screen
-                if self.connections.contains(token) {
-                    self.connections[token].write_zipped_screen(screen);
-                }
-                if self.connections.contains(token) {
-                    self.connections[token].reregister_writable(event_loop);
-                }
-            },
-            Msg::SendCommand(token, send) => {
-                //Tell it to send a command
-                //TODO Revamp this. We should not send this but once.
-                if self.connections.contains(token) {
-                    self.connections[token].send_command(send);
-                }
-            },
-            Msg::Hp(token, hp) => {
-                if self.connections.contains(token) {
-                    self.connections[token].write_stat_all(hp, 500, 100, 100, 25, 1000000, 3000000, 6, 10);
-                }
-                if self.connections.contains(token) {
-                    self.connections[token].reregister_writable(event_loop);
-                }
-            },
-            Msg::Shout(msg) => {
-                let mut tokens = vec![];
-                for t in self.connections.iter() {
-                    if t.token.as_usize() != 0 {
-                        tokens.push(t.token);
+    fn timeout(&mut self, event_loop: &mut mio::EventLoop<Server>, timeout: mio::Token) {
+        loop {
+            match self.recv.try_recv() {
+                Ok(msg) => {
+                    match msg {
+                        Msg::TextOutput(token, result, message) => {
+                            // Write message
+                            if self.connections.contains(token) {
+                                self.connections[token].write_text_out(result, &message);
+                            }
+                            if self.connections.contains(token) {
+                                self.connections[token].reregister_writable(event_loop);
+                            }
+                        },
+                        Msg::Screen(token, screen) => {
+                            //Write screen
+                            if self.connections.contains(token) {
+                                self.connections[token].write_zipped_screen(screen);
+                            }
+                            if self.connections.contains(token) {
+                                self.connections[token].reregister_writable(event_loop);
+                            }
+                        },
+                        Msg::Hp(token, hp) => {
+                            if self.connections.contains(token) {
+                                self.connections[token].write_stat_all(hp, 500, 100, 100, 25, 1000000, 3000000, 6, 10);
+                            }
+                            if self.connections.contains(token) {
+                                self.connections[token].reregister_writable(event_loop);
+                            }
+                        },
+                        Msg::Shout(msg) => {
+                            let mut tokens = vec![];
+                            for t in self.connections.iter() {
+                                if t.token.as_usize() != 0 {
+                                    tokens.push(t.token);
+                                }
+                            }
+                            for token in tokens {
+                               self.connections[token].write_text_out(4,&msg); 
+                               self.connections[token].reregister_writable(event_loop);
+                            }
+                        },
+                        _ => {
+                            panic!("Oh no!");
+                        }
                     }
-                }
-                for token in tokens {
-                   self.connections[token].write_text_out(4,&msg); 
-                   self.connections[token].reregister_writable(event_loop);
-                }
-            },
-            _ => {
-                panic!("Oh no!");
+                },
+                Err(_) => {
+                    break; 
+                },
             }
         }
+        //Essentially this is acting as a coroutine to yield so other messages can be handled. 
+        let _ = event_loop.timeout_ms(TIMEOUT, 1);
     }
 
     fn ready(&mut self, event_loop: &mut mio::EventLoop<Server>, token: mio::Token, events: mio::EventSet){
@@ -177,7 +184,7 @@ impl mio::Handler for Server {
                         println!("Something def fucked up");
                         //event_loop.shutdown();
                     },
-                };
+                }
             },
             _ => {
                 //otherwise, call the server's ready connection.
@@ -216,7 +223,6 @@ struct Connection {
     socket: TcpStream,
     token: mio::Token,
     to_client_queue: Vec<ByteBuf>,
-    from_client_queue: Vec<String>,
     event_set: mio::EventSet,
     state: State,
 }
@@ -229,7 +235,6 @@ impl Connection{
             name: "".to_string(),
             token: token,
             to_client_queue: vec![],
-            from_client_queue: vec![],
             event_set: mio::EventSet::readable(),
             state: State::NotLoggedIn,
         }
@@ -245,16 +250,9 @@ impl Connection{
             },
         }
     }
-    
-    fn send_command(&mut self, send: Sender<Msg>) {
-        if self.from_client_queue.len() > 0 {
-            let command = self.from_client_queue.pop().unwrap();
-            send.send(Msg::Command(self.token.clone(), command));
-        }
-    }
 
     fn quit(&mut self, event_loop: &mut mio::EventLoop<Server>) {
-        let game_loop = self.games.borrow_mut().get_or_create_game_loop("map", event_loop);
+        let game_loop = self.games.borrow_mut().get_or_create_game_loop("map");
         game_loop.borrow_mut().remove(self.token.clone());
     }
     
@@ -313,10 +311,12 @@ impl Connection{
                                 let mut m = format!("{} shouts: {} ", self.name, msg).to_string();
                                 //Doing this the trivially easy way, just doing a notification for
                                 //that gets pushed to everyone
-                                let send = event_loop.channel();
+                                let send = self.games.borrow_mut().send.clone();
                                 send.send(Msg::Shout(m));
                             } else {
-                                self.from_client_queue.push(command.to_string());
+                                let game_loop = self.games.borrow_mut().get_or_create_game_loop("map");
+                                game_loop.borrow_mut().send_command(Msg::Command(self.token.clone(),
+                                command.to_string()));
                             }
                             n = n - (2 + length);
                         }
@@ -449,7 +449,7 @@ impl Connection{
                         println!("Tiles");
                         self.reregister_writable(event_loop);
                         println!("Writable");
-                        let game_loop = self.games.borrow_mut().get_or_create_game_loop("map", event_loop);
+                        let game_loop = self.games.borrow_mut().get_or_create_game_loop("map");
                         game_loop.borrow_mut().join(self.token.clone(), self.name.clone());
                         println!("Looped");
                         //This is here only while it is a single user. Normally, these would be added to the game_loop, not set.

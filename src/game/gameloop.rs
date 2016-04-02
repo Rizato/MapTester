@@ -31,6 +31,7 @@ use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
 use std::sync::RwLock;
+use std::sync::Mutex;
 use std::sync::Arc;
 
 use game::gamemap::GameMap;
@@ -44,16 +45,18 @@ pub struct GameLoop {
     //Map with all items & tiles
     game_map: Arc<RwLock<GameMap>>,
     connections: Arc<RwLock<Vec<mio::Token>>>, 
-    send: mio::Sender<Msg>,
+    command_queue: Arc<Mutex<Vec<Msg>>>, 
+    to_game_send: Sender<Msg>,
 }
 
 impl GameLoop {
     ///creates a new game loop
-    pub fn new(mapname : &str, send: mio::Sender<Msg>) -> GameLoop {
+    pub fn new(mapname : &str, send: Sender<Msg>) -> GameLoop {
         let mut gloop = GameLoop {
             game_map: Arc::new(RwLock::new(GameMap::new(mapname).unwrap())),
             connections: Arc::new(RwLock::new(vec![])),
-            send: send,
+            command_queue: Arc::new(Mutex::new(vec![])),
+            to_game_send: send,
         };
         gloop.start();
         gloop
@@ -72,41 +75,32 @@ impl GameLoop {
     pub fn start(&mut self) {
         let game_map = self.game_map.clone();
         let connections = self.connections.clone();
-        let to_mio = self.send.clone();
+        let commands = self.command_queue.clone();
+        let to_mio = self.to_game_send.clone();
         thread::spawn(move || {
-           let (send, recv) = channel(); 
+           //TODO give this sender to someone.
            loop {
-               let mut threads = vec![];
                thread::sleep(Duration::from_millis(20));
-               println!("Creating conns");
-               let mutex = connections.read().unwrap();
-               for connection in mutex.iter(){ 
-                   let s = send.clone();
-                   let c = connection.clone();
-                   let t = to_mio.clone();
-                   threads.push(thread::spawn(move|| {
-                        let _ = t.send(Msg::SendCommand(c, s));
-                   }));
-               }
-               for t in threads {
-                    t.join().unwrap();
-               }
                let mut map = game_map.write().unwrap();
                //This can cause DOS by keeping the commands from executing
                println!("Reading commands");
-               'outer: loop {
-                   match recv.try_recv() {
-                       Ok(Msg::Command(token, command)) => {
-                           //println!("{}", command);
-                           &map.push_command(token, command); 
-                       },
-                       _ => {
-                           //println!("Nothin.");
-                           break 'outer; 
-                       }
-                   }
+               //Putting this in a scope so that the commands can be repopulated when it is executing.
+               {
+                    let mut c = commands.lock().unwrap();
+                    for m in c.drain(..) {
+                        match m {
+                            Msg::Command(token, command) => {
+                                //println!("{}", command);
+                                &map.push_command(token.clone(), command.clone()); 
+                            },
+                            _ => {
+                                //println!("Nothin.");
+                            },
+                        }
+                    }
                }
                //TODO get these responses in there somehow
+               let mutex = connections.read().unwrap();
                let responses = map.execute(&mutex);
                //Cannot seem to decontruct tuples in a loop. Doing the index version instead of
                //iterating
@@ -124,18 +118,11 @@ impl GameLoop {
                    }
                    let screen = map.send_portion(conn.clone());
                    //Need to see response from sender
-                   match to_mio.send(Msg::Screen(conn.clone(), screen.clone())) {
-                        Err(mio::NotifyError::Io(_)) => {
-                            println!("IO");
-                        },
-                        Err(mio::NotifyError::Full(_)) => {
-                            println!("FUll");
-                        },
-                        Err(mio::NotifyError::Closed(_)) => {
-                            println!("Closed");
-                        },
-                        Ok(_) => {
-                        },
+                   match screen {
+                       Some(s) => {
+                           to_mio.send(Msg::Screen(conn.clone(), s));
+                       },
+                       None => {},
                    }
                }
                println!("Finished Loop");
@@ -160,5 +147,9 @@ impl GameLoop {
                 break;
             }
         }
+    }
+
+    pub fn send_command(&mut self, message: Msg) {
+        self.command_queue.lock().unwrap().push(message);
     }
 }
