@@ -13,6 +13,12 @@ Check the side bar for links to the game client and such.
 * Navigate to the cloned directory
 * execute `cargo run`
 
+# Connecting as client
+
+* Fill in one of the player arts as username. Examples: panther_male, mage, paladin, malirith_male.
+* Put anything in as the password. We don't care about it.
+* Fill in the domain name/ip where the server is hosted. I have it up on map.rizato.com if you wish to try it out.
+
 # Comptability
 
 ## Server
