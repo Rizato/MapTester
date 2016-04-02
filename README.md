@@ -6,7 +6,21 @@ Check out the [wyvernrpg subreddit](https://reddit.com/r/wyvernrpg) for info abo
 
 Check the side bar for links to the game client and such.
 
+# Running
+
+* In order to build you need rust installed. Get Rust [here](https://www.rust-lang.org/downloads.html)
+* Clone this project.
+* Navigate to the cloned directory
+* execute `cargo run`
+
 # Comptability
 
-So this client works with the existing game client. Fortunately, we don't have to reverse anything
-because the entire protocol is documented, along with permission to use the art assets, [here](http://web.archive.org/web/20101121021755/http://cabochon.com/wiz/clients) and [here](http://web.archive.org/web/20101121031823/http://cabochon.com/wiz/client_protocol)
+## Server
+Due to some compatibility issues in one of the dependent projects, Mio, the server cannot run on Windows. 
+
+## Client
+This works with the original Wyvern client. It is compatible with clients running on any platform. 
+
+Fortunately, we don't have to reverse anything to get that behavior. The entire protocol is documented, along with permission to use the art assets, [here](http://web.archive.org/web/20101121021755/http://cabochon.com/wiz/clients) and [here](http://web.archive.org/web/20101121031823/http://cabochon.com/wiz/client_protocol)
+
+Additionally, because the API from Wyvern is subject to copyright, we obtained permission from the copyright holder to publish that portion of the code.
