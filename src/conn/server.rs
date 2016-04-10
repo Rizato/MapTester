@@ -220,6 +220,7 @@ impl mio::Handler for Server {
 struct Connection {
     games: Arc<RefCell<Game>>,
     name: String,
+    skin: String,
     socket: TcpStream,
     token: mio::Token,
     to_client_queue: Vec<ByteBuf>,
@@ -233,6 +234,7 @@ impl Connection{
             games: games,
             socket: socket,
             name: "".to_string(),
+            skin: "".to_string(),
             token: token,
             to_client_queue: vec![],
             event_set: mio::EventSet::readable(),
@@ -310,6 +312,23 @@ impl Connection{
                                     },
                                     _ => {},
                                 }
+                            } else if command.starts_with("#skin ") && command.len() > 5 {
+                                match command.split(" ").next().unwrap().parse() {
+                                    Ok(skin) => {
+                                        self.skin = skin;
+                                        match self.games.borrow_mut().get_or_create_game_loop("maps/main.map") {
+                                            Some(game_loop) => {
+                                                game_loop.borrow_mut().send_command(Msg::Command(self.token.clone(),
+                                                command.to_string()));
+                                            },
+                                            None => {},
+                                        }
+
+                                    },
+                                    _ => {},
+                                }
+
+
                             } else if command.starts_with("shout ") && command.len() > 6 {
 
                                 let (ref a, ref msg) = command.split_at(6);

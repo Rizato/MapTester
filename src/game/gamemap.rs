@@ -244,6 +244,25 @@ impl GameMap {
         }
     }
 
+    ///Sets a new tile for the user
+    fn change_skin(&mut self, index: u32, skin: &str ) {
+        println!("Changing skin to {}", skin);
+        let mut tiles = self.tiles.write().unwrap();
+        if tiles[index as usize].blocked {
+            match tiles[index as usize].user {
+                Some(ref mut user) => {
+                    match user.player {
+                        Commandable::P(ref mut player) => {
+                            player.tile = format!("players/{}.", skin.to_string());
+                        },
+                        _ => {},
+                    }
+                },
+                None =>{},
+            }
+        }
+    }
+
     /// Removes the tile at the given index
     fn wipe_user(&mut self, o: u32) {
         println!("Wipe User");
@@ -490,7 +509,7 @@ impl GameMap {
     
     ///Executes a given command. Generates a possibly generates a vector of responses.
     fn execute_command(&mut self, token: Option<mio::Token>, command: String ) -> Option<Vec<(mio::Token, u8, String)>> {
-        println!("Execute Command");
+        //println!("Execute Command");
         match token {
             Some(t) => {
                 let (x, y) = self.find_tile_with_token(t.clone()).unwrap();
@@ -522,7 +541,15 @@ impl GameMap {
                             Some(vec![(t.clone(), 5,  "No Path Found".to_string()); 1])
                         },
                     }
-                } else {
+                } else if command.starts_with("#skin "){
+                    let parts: Vec<&str> = command.split(" ").collect();
+                    if parts.len() > 1 {
+                       self.change_skin(index.clone(), parts[1]); 
+                       Some(vec![(t.clone(), 3,  "Skin Changed".to_string()); 1])
+                    } else {
+                        None
+                    }
+                }else {
                     //System message
                     println!("{}", command);
                     Some(vec![(t.clone(), 5,  "Bad command".to_string()); 1])
