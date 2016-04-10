@@ -252,8 +252,13 @@ impl Connection{
     }
 
     fn quit(&mut self, event_loop: &mut mio::EventLoop<Server>) {
-        let game_loop = self.games.borrow_mut().get_or_create_game_loop("map");
-        game_loop.borrow_mut().remove(self.token.clone());
+        println!("Quit parse");
+        match self.games.borrow_mut().get_or_create_game_loop("maps/main.map") {
+            Some(game_loop) => {
+                game_loop.borrow_mut().remove(self.token.clone());
+            },
+            None => {},
+        }
     }
     
     fn ready(&mut self, event_loop: &mut mio::EventLoop<Server>){
@@ -288,7 +293,7 @@ impl Connection{
                 self.reregister_readable(event_loop);
             },
             Ok(Some(mut n)) => {
-                println!("Read {}", n);
+                //println!("Read {}", n);
                 //Read strings. Write to game_loop
                 loop {
                     if n >= 3 {
@@ -313,10 +318,21 @@ impl Connection{
                                 //that gets pushed to everyone
                                 let send = self.games.borrow_mut().send.clone();
                                 send.send(Msg::Shout(m));
+                            } else if command.starts_with("join ") && command.len() > 5 {
+                                let (ref a, ref msg) = command.split_at(6);
+                                //Check to see if the server exists
+                                //If map files exists it needs to create it.
+                                //Remove player from the old map. Add to the new.
+                                 
                             } else {
-                                let game_loop = self.games.borrow_mut().get_or_create_game_loop("map");
-                                game_loop.borrow_mut().send_command(Msg::Command(self.token.clone(),
-                                command.to_string()));
+                                //println!("Readable parse");
+                                match self.games.borrow_mut().get_or_create_game_loop("maps/main.map") {
+                                    Some(game_loop) => {
+                                        game_loop.borrow_mut().send_command(Msg::Command(self.token.clone(),
+                                        command.to_string()));
+                                    },
+                                    None => {},
+                                }
                             }
                             n = n - (2 + length);
                         }
@@ -351,7 +367,7 @@ impl Connection{
                 
             },
             Ok(None) => {
-                println!("Wrote to queue");
+                //println!("Wrote to queue");
                 self.to_client_queue.push(buf);
                 self.reregister_writable(event_loop);
             },
@@ -380,31 +396,31 @@ impl Connection{
                     let first_value: i32 = buf[..].iter().take(4).fold(0i32, |sum, x| sum  << 8 | *x as i32);
                     if first_value == 1 {
                         let width: i16 = buf[4..].iter().take(2).fold(0i16, |sum, x| sum << 8 | *x as i16);
-                        println!("width {}", width);
+                        //println!("width {}", width);
                         let height: i16 = buf[6..].iter().take(2).fold(0i16, |sum, x| sum << 8 | *x as
                                                                   i16);
-                        println!("height {}", height);
+                        //println!("height {}", height);
                         let name_len: usize= buf[8..].iter().take(2).fold(0usize, |sum, x| sum << 8 | *x as usize);
                         let name: &str = std::str::from_utf8(&buf[10..10+name_len]).unwrap();
                         self.name = name.to_string();
-                        println!("name {}", name);
+                        //println!("name {}", name);
                         let pw_len: usize= buf[10+name_len..].iter().take(2).fold(0usize, |sum, x| sum << 8 | *x as usize);
                         let pw: &str = std::str::from_utf8(&buf[12+name_len..12+name_len+pw_len]).unwrap();
-                        println!("pw {}", pw);
+                        //println!("pw {}", pw);
                         let version_len: usize= buf[12+name_len+pw_len..].iter().take(2).fold(0usize, |sum, x| sum << 8 | *x as usize);
-                        println!("Remanining {} Version {}", 16+name_len+pw_len, version_len);
+                        //println!("Remanining {} Version {}", 16+name_len+pw_len, version_len);
                         //Hoping that it can't double send. Cause that'll produce weird results
                         let version: &str =
                             std::str::from_utf8(&buf[14+name_len+pw_len..]).unwrap();
-                        println!("version {}", version);
-                        println!("game_loop");
+                        //println!("version {}", version);
+                        //println!("game_loop");
                         //Change to state logged in
                         self.state = State::LoggedIn;
-                        println!("state");
+                        //println!("state");
                         //Write to user they are logged in
                         //TODO Make writers optional, cause this needs to have registered writable
                         self.write_conn_result(3);
-                        println!("write_state");
+                        //println!("write_state");
                         //Send tile mappings for artwork
                         self.write_tile_mappings();
                         println!("Adding items");
@@ -449,9 +465,14 @@ impl Connection{
                         println!("Tiles");
                         self.reregister_writable(event_loop);
                         println!("Writable");
-                        let game_loop = self.games.borrow_mut().get_or_create_game_loop("map");
-                        game_loop.borrow_mut().join(self.token.clone(), self.name.clone());
-                        println!("Looped");
+                        println!("Login parse");
+                        match self.games.borrow_mut().get_or_create_game_loop("maps/main.map") {
+                            Some(game_loop) => {
+                                game_loop.borrow_mut().join(self.token.clone(), self.name.clone());
+                                println!("Looped");
+                            },
+                            None => {},
+                        }
                         //This is here only while it is a single user. Normally, these would be added to the game_loop, not set.
                         self.reregister_readable(event_loop);
                     } else {
@@ -563,7 +584,7 @@ impl Api for Connection {
     }
 
     fn write_timestamp(vec: &mut Vec<u8>) {
-        println!("Timestamp");
+        //println!("Timestamp");
         let current = time::get_time();
         let mut milli = current.sec * 1000;
         milli = milli + (current.nsec as i64 / 1000000);
@@ -571,7 +592,7 @@ impl Api for Connection {
     }
 
     fn write_conn_result(&mut self, result: u8) {
-        println!("Conn Result");
+        //println!("Conn Result");
         let mut conn: Vec<u8> = vec![];
         //connection result indication
         Connection::write_header(&mut conn, 2, 5);
@@ -590,7 +611,7 @@ impl Api for Connection {
     }
     
     fn write_quit(&mut self) {
-        println!("Quit");
+        //println!("Quit");
         //quit indication
         let mut q: Vec<u8> = vec![];
         Connection::write_header(&mut q, 13, 0);
@@ -598,7 +619,7 @@ impl Api for Connection {
     }
     
     fn write_tile_mappings(&mut self) {
-        println!("Mappings");
+        //println!("Mappings");
         //Read map files. Write out entire output.
         let mut uncompressed: Vec<u8> = vec![];
         for (k, v) in self.games.borrow().mappings.iter() {
@@ -621,7 +642,7 @@ impl Api for Connection {
     }
 
     fn write_tile(&mut self, tile: i16) {
-        println!("WRite tile");
+        //println!("Write tile");
         let mut path = String::new();
         for (k, v) in self.games.borrow().mappings.iter() {
             if v.clone() == tile {
@@ -637,7 +658,7 @@ impl Api for Connection {
     }
     
     fn write_text_out(&mut self, style: u8, message: &str) {
-        println!("Text Out");
+        //println!("Text Out");
         let mut m: Vec<u8> = vec![];
         //text out byte
         Connection::write_header(&mut m, 11, (message.len()+3) as i32);
@@ -661,9 +682,9 @@ impl Api for Connection {
                 },
             }
         }
-        println!("Zipped screen");
+        //println!("Zipped screen");
         for object in screen.objects.iter() {
-            println!("Object! {}", object.tile);
+            //println!("Object! {}", object.tile);
             uncompressed.push(object.y);
             uncompressed.push(object.x);
             match self.games.borrow_mut().mappings.get(&object.tile) {
@@ -676,7 +697,7 @@ impl Api for Connection {
                 },
             }
         }
-        println!("Zipped screen");
+        //println!("Zipped screen");
         let u_len = uncompressed.len();
         let mut compressed = Connection::zip_data(uncompressed);
         let z_len = compressed.len();
@@ -694,11 +715,11 @@ impl Api for Connection {
         //zipped contents
         s.append(&mut compressed);
         self.to_client_queue.insert(0, ByteBuf::from_slice(&s[..]));
-        println!("Zipped screen");
+        //println!("Zipped screen");
     }
 
     fn write_stat_name(&mut self, name: &str) {
-        println!("Name");
+        //println!("Name");
         let mut n = vec![];
         Connection::write_header(&mut n, 106, 2 + name.len() as i32);
         Connection::write_string(&mut n, name);
@@ -706,7 +727,7 @@ impl Api for Connection {
     }
 
     fn write_stat_gold(&mut self, gold: i32) {
-        println!("Write gold");
+        //println!("Write gold");
         let mut n = vec![];
         Connection::write_header(&mut n, 104, 4);
         Connection::write_i32(&mut n, gold);
@@ -714,7 +735,7 @@ impl Api for Connection {
     }
 
     fn write_stat_level(&mut self, level: u8, xp: i32) {
-        println!("WRite level");
+        //println!("Write level");
         let mut n = vec![];
         Connection::write_header(&mut n, 105, 5);
         n.push(level);
@@ -724,7 +745,7 @@ impl Api for Connection {
 
     fn write_stat_all(&mut self, hp: i32, mhp: i32, sp: i32, msp: i32, level: i32, xp: i32, nxp:
                       i32, food: i32, mfood: i32) {
-        println!("WRITE STATS");
+        //println!("WRITE STATS");
         let mut n = vec![];
         Connection::write_header(&mut n, 120, 36 );
         Connection::write_i32(&mut n, hp);
@@ -741,7 +762,7 @@ impl Api for Connection {
     }
                       
     fn write_ground_add(&mut self, name: &str, commands: &str, tile_name: &str, index: i16, offsets: i16) {
-        println!("Write ground add {}", name);
+        //println!("Write ground add {}", name);
         let mut n = vec![];
         Connection::write_header(&mut n, 80, (10 + name.len() + commands.len()) as i32);
         let tile = self.games.borrow_mut().mappings.get(tile_name).unwrap().clone();
@@ -754,7 +775,7 @@ impl Api for Connection {
     }
     
     fn write_inv_add(&mut self, name: &str, commands: &str, tile_name: &str, index: i16, offsets: i16) {
-        println!("Write inv add {}", name);
+        //println!("Write inv add {}", name);
         let mut n = vec![];
         Connection::write_header(&mut n, 70, (10 + name.len() + commands.len()) as i32);
         let tile = self.games.borrow_mut().mappings.get(tile_name).unwrap().clone();
@@ -767,7 +788,7 @@ impl Api for Connection {
     }
     
     fn zip_data(data: Vec<u8> ) -> Vec<u8> {
-        println!("ZIP");
+        //println!("ZIP");
         let d = data.len();
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::Default);
         let mut written = 0;

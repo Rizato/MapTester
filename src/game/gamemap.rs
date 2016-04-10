@@ -15,6 +15,7 @@ limitations under the License.*/
 
 extern crate mio;
 extern crate slab;
+extern crate xml;
 
 use game::characters::Controllable;
 use game::characters::Direction;
@@ -24,6 +25,11 @@ use game::characters::projectile::Projectile;
 
 use std::sync::RwLock;
 use std::sync::Arc;
+use std::fs::File;
+use std::io::BufReader;
+
+use xml::reader::{EventReader, XmlEvent};
+
 use self::slab::Index;
 
 /// This module holds all the map related stuff. It has the GameMap itself, along with the
@@ -37,56 +43,171 @@ pub struct GameMap {
     pub width: u8,
     pub height: u8,
     pub tiles: Arc<RwLock<Vec<MapTile>>>,
-    //TODO This is temporary
     start_x: u8,
     start_y: u8, 
-    tower_index: u32,
 }
 
 impl GameMap {
     /// This currently creates a generic map. It will eventually load a map by filename and turn
     /// that into a valid MapObject
-    pub fn new(mapname: &str) -> Result<GameMap, &str> {
-        //TODO Load map from file use ProtocolBuffers.
-        let mut tiles: Vec<MapTile> = vec![];
-        //Just doing a fake thing really quick.
-        for _ in 0..360 {
-            tiles.push(MapTile::new("terrain/grass".to_string()));
+    pub fn new(mapname: &str) -> Result<GameMap, String> {
+        if !GameMap::maps_exist(mapname) {
+            return Err("Map Not Found".to_string());
         }
-        for _ in 0..5 {
-            for _ in 0..4 {
-                tiles.push(MapTile::new("terrain/gray_brick".to_string()));
-            }
-            for _ in 0..22 {
-                tiles.push(MapTile::new("terrain/dirt".to_string()));
-            }
-            for _ in 0..4 {
-                tiles.push(MapTile::new("terrain/gray_brick".to_string()));
+        match GameMap::parse_tiles(mapname) {
+            Ok(mut map) => {
+                //Still throwing the tile in because right now it is setup for that. 
+                //let t_index = 405;
+                //map.tiles[t_index as usize].user = Some(MapUser::new(None,Commandable::T(Tower::new())));
+                //map.tiles[t_index as usize].blocked = true;
+                //let mut ti = Arc::new(RwLock::new(tiles));
+                Ok(map)
+            },
+            Err(s) => {
+                Err(s)
+            },
+        }
+    }
+    
+    fn maps_exist(path: &str) -> bool {
+        match File::open(path) {
+            Err(_) => {
+               false 
+            }, 
+            Ok(_) => {
+                true
             }
         }
-        for _ in 0..390 {
-            tiles.push(MapTile::new("terrain/grass".to_string()));
+    }
+
+    fn parse_tiles(path: &str) -> Result<GameMap, String>{
+        println!("Parsing! {}", path);
+        match File::open(path) {
+            Err(_) => {
+               Err("Failed to parse".to_string()) 
+            },
+            Ok(file) => {
+                let buf = BufReader::new(file);
+                let parser = EventReader::new(buf);
+                let mut header = false;
+                let mut tiles: Vec<MapTile> = vec![];
+                let mut width: u8 = 0;
+                let mut height: u8 = 0;
+                for event in parser {
+                    match event { 
+                        Ok(XmlEvent::StartElement {name, attributes, ..}) => {
+                            if name.local_name == "header" {
+                                println!("Header");
+                                header = true;
+                                for attr in attributes {
+                                    if attr.name.local_name == "width" {
+                                        match attr.value.parse::<u8>() {
+                                            Ok(w) => {
+                                                width = w;
+                                                println!("Width {}", width);
+                                            },
+                                            Err(_) => {
+                                                return Err("Bad Width".to_string());
+                                            },
+                                        }
+                                    } else if attr.name.local_name == "height" {
+                                        match attr.value.parse::<u8>() {
+                                            Ok(h) => {
+                                                height = h;
+                                                println!("Height {}", height);
+                                            },
+                                            Err(_) => {
+                                                return Err("Bad Height".to_string());
+                                            },
+                                        }
+                                    }
+                                }
+                                //Define header behavior
+                                if height > 0 && width > 0 {
+
+                                } else {
+                                    return Err("Invalid dimensions".to_string());
+                                }
+                            } else if name.local_name == "arch" {
+                                println!("Arch");
+                                if header {
+                                    let mut terrain: String = String::new();
+                                    let mut is_terrain = false;
+                                    for attr in attributes {
+                                        //TODO Handle out of bounds terrain.
+                                        println!("head-arch {}", attr.name.local_name);
+                                        if attr.name.local_name == "name" &&
+                                            attr.value == "terrain" {
+                                                is_terrain = true;
+                                        } else if attr.name.local_name == "path" { 
+                                            terrain = attr.value.clone();
+                                            println!("Background: {}", terrain);
+                                        }
+                                    }
+                                    if is_terrain {
+                                        let size = width as u32 * height as u32;
+                                        for x in 0..size {
+                                            tiles.push(MapTile::new(terrain.clone()));
+                                        }
+                                    }
+                                } else {
+                                    //TODO
+                                    //Read the loc. 
+                                    //If it is a rectangle, apply that tile to the
+                                    //  entire area as the terrain.
+                                    //Else add it to the array of map items  (need to refactor maps)
+                                    let mut terrain: String = "".to_string();
+                                    let mut rect_x: u8 = 0;
+                                    let mut rect_y: u8 = 0;
+                                    let mut rect_w: u8 = 0;
+                                    let mut rect_h: u8 = 0;
+                                    for attr in attributes {
+                                        if attr.name.local_name == "path" {
+                                            terrain = attr.value;
+                                        } else if attr.name.local_name =="loc" {
+                                            let split: Vec<&str>= attr.value.split(" ").collect();
+                                            if split.len() == 4 {
+                                                rect_x = split[0].parse::<u8>().unwrap();
+                                                rect_y = split[1].parse::<u8>().unwrap();
+                                                rect_w = split[2].parse::<u8>().unwrap();
+                                                rect_h = split[3].parse::<u8>().unwrap();
+                                            } else if split.len() == 2 {
+                                                rect_x = split[0].parse::<u8>().unwrap();
+                                                rect_y = split[1].parse::<u8>().unwrap();
+                                                rect_w = 1;
+                                                rect_h = 1;
+                                            }
+                                        }
+                                    }
+                                    for x in rect_x..(rect_x+rect_w) {
+                                        for y in rect_y..(rect_y+rect_h) {
+                                            let index: usize = (y as usize * width as usize) as usize + x as usize;
+                                            tiles[index].tile = terrain.clone();
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        Ok(XmlEvent::EndElement {name}) => {
+                            if name.local_name == "header" {
+                                println!("End header");
+                                header = false;
+                            }
+                        },
+                        _ => {
+
+                        },
+                    }
+                }
+                Ok(GameMap{
+                    width: width,
+                    height: height,
+                    tiles: Arc::new(RwLock::new(tiles)),
+                    start_x : 1,
+                    start_y : 1,
+                })
+            },
         }
-        
-        let t_index = 405;
-        tiles[t_index as usize].user = Some(MapUser::new(None,Commandable::T(Tower::new())));
-        tiles[t_index as usize].blocked = true;
-        let mut ti = Arc::new(RwLock::new(tiles));
-        let map = GameMap {
-            width: 30,
-            height: 30,
-            start_x: 29,
-            start_y: 14,
-            tower_index: t_index,
-            
-            //Coordinates in tiles will simulate a 2d matrix, while actually being a 1d array.
-            // Everything will be found by multiplying the width * y + x
-            //   0  1  2  3  4  5  6  7
-            // 0 0  1  2  3  4  5  6  7
-            // 1 8  9  10 11 12 13 14 15
-            tiles: ti.clone(), 
-        };
-        Ok(map)
     }
 
     ///Grabs the MapTile at the given index
@@ -229,9 +350,7 @@ impl GameMap {
 
     /// Returns the x,y value of a token
     fn find_tile_with_token(&self, token: mio::Token) -> Option<(u32, u32)> {
-        println!("Finding Tiles");
         let tiles = self.tiles.read().unwrap();
-        println!("Found Tiles!");
         let len = tiles.len();
         for t in 0..len {
             match tiles[t as usize].user {
@@ -257,54 +376,57 @@ impl GameMap {
         //Resolve any combat/damage
         //Add responses for action specific to players involved
         //return the vec
-        let x  = self.tower_index % self.width as u32;
-        let y  = self.tower_index / self.width as u32;
+        //let x  = self.tower_index % self.width as u32;
+        //let y  = self.tower_index / self.width as u32;
+        let width = self.width;
+        let height = self.height;
         
         //Pushing all tokens to the tower   
-        {
-            let mut players= vec![];
-            //Grabbing all of the players around the tower index
-            let mut tiles = self.tiles.write().unwrap();
-            let start_x = if x > 8 { x-8} else {0};
-            let end_x = if x +10 < self.width as u32 {x + 10} else {self.width as u32};
-            let start_y = if y > 8 { y-8} else {0};
-            let end_y = if y +10 < self.height  as u32 {y + 10} else {self.height as u32};
-            for i in start_x..end_x {
-                for j in start_y..end_y {
-                    let ref player = tiles[j  as usize * self.width as usize + i as usize];
-                    match player.user {
-                       Some(ref u) => {
-                           match u.token {
-                               Some(ref t) => {
-                                   &players.push(t.clone());
-                               },
-                               _ => {},
-                           }
-                        }, 
-                        _ => {},
-                    }
-                }
-            }
-            match tiles[self.tower_index as usize].user {
-                Some(ref mut user) => {
-                    match user.player {
-                        Commandable::T(ref mut tower) => {
-                            tower.push_tokens(players); 
-                        },
-                        _ => {},
-                    } 
-                },
-                _ => {},
-            };
-        }
+        //{
+        //    let mut players= vec![];
+        //    //Grabbing all of the players around the tower index
+        //    let mut tiles = self.tiles.write().unwrap();
+        //    let start_x = if x > 8 { x-8} else {0};
+        //    let end_x = if x +10 < self.width as u32 {x + 10} else {self.width as u32};
+        //    let start_y = if y > 8 { y-8} else {0};
+        //    let end_y = if y +10 < self.height  as u32 {y + 10} else {self.height as u32};
+        //    for i in start_x..end_x {
+        //        for j in start_y..end_y {
+        //            let ref player = tiles[j  as usize * self.width as usize + i as usize];
+        //            match player.user {
+        //               Some(ref u) => {
+        //                   match u.token {
+        //                       Some(ref t) => {
+        //                           &players.push(t.clone());
+        //                       },
+        //                       _ => {},
+        //                   }
+        //                }, 
+        //                _ => {},
+        //            }
+        //        }
+        //    }
+        //    match tiles[self.tower_index as usize].user {
+        //        Some(ref mut user) => {
+        //            match user.player {
+        //                Commandable::T(ref mut tower) => {
+        //                    tower.push_tokens(players); 
+        //                },
+        //                _ => {},
+        //            } 
+        //        },
+        //        _ => {},
+        //    };
+        //}
         let mut retval = vec![];
         //Looping through all tiles
-        for i in 0..900 {
+        let size = (height as usize * width as usize) as usize;
+        for i in 0..size {
             let mut t = None;
             let mut command = None;
-            let mut projectile_command = None;
+            //let mut projectile_command = None;
             {
-                //Gets the command the mapuser on this tile (if one exists)
+        //        //Gets the command the mapuser on this tile (if one exists)
                 let mut tiles = self.tiles.write().unwrap();
                 command = match tiles[i].user {
                     Some(ref mut user) => {
@@ -322,13 +444,13 @@ impl GameMap {
                         None
                     },
                 };
-                //gets the command for a projectile on this tile, if one exists
-                projectile_command = match tiles[i].projectile {
-                    Some(ref mut p) => {
-                        p.get_command(i as u32)
-                    },
-                    _ => {None},
-                };
+        //        //gets the command for a projectile on this tile, if one exists
+        //        projectile_command = match tiles[i].projectile {
+        //            Some(ref mut p) => {
+        //                p.get_command(i as u32)
+        //            },
+        //            _ => {None},
+        //        };
             }
             //Executing command from player or tower
             match command {
@@ -346,22 +468,22 @@ impl GameMap {
                 },
                 None => {},
             }
-            //executing command from projectile
-            match projectile_command {
-                Some(c) => {
-                    println!("command {}", c);
-                    match self.execute_command(None, c) {
-                        Some(responses) => {
-                            for x in 0..responses.len() {
-                                let (token, style, response) = responses[x].clone();
-                                retval.push((token, style, response));
-                            }
-                        },
-                        None => {},
-                    };
-                },
-                None => {},
-            }
+        //    //executing command from projectile
+        //    match projectile_command {
+        //        Some(c) => {
+        //            println!("command {}", c);
+        //            match self.execute_command(None, c) {
+        //                Some(responses) => {
+        //                    for x in 0..responses.len() {
+        //                        let (token, style, response) = responses[x].clone();
+        //                        retval.push((token, style, response));
+        //                    }
+        //                },
+        //                None => {},
+        //            };
+        //        },
+        //        None => {},
+        //    }
         }
         retval
     }
@@ -502,7 +624,7 @@ impl GameMap {
     
     /// This generates a new MapScreen based on the location of the given connection's user
     pub fn send_portion(&self, token: mio::Token) -> Option<MapScreen> {
-        println!("Send Portion");
+        //println!("Send Portion");
         //This sends the squares around the user, which will always be centered in the screen.
         match self.find_tile_with_token(token.clone()) {
             Some((x, y)) => {
@@ -622,7 +744,7 @@ impl GameMap {
 #[derive(Clone)]
 pub struct MapTile{
     //No position, because position is determined by the position in vector
-    tile: String,
+    pub tile: String,
     pub user: Option<MapUser>,
     pub blocked: bool,
     pub projectile: Option<Projectile>,
@@ -822,14 +944,14 @@ impl MapScreen {
     pub fn new(map: &GameMap, x: u32, y: u32) -> MapScreen {
         let startx: isize = x as isize -7;
         let starty: isize = y as isize -7;
-        let mut ter = vec![];
+        let mut ter = Vec::with_capacity(225);
         let mut obj = vec![];
         //If coords are valid we will actually draw something
         let empty = ScreenTerrain::new("terrain/empty".to_string());
         if map.width as u32 > x && map.height as u32 > y {
-            for i in 0..15{
-                for j in 0..15{
-                    if startx+i >= 0 && startx+(i as isize) < (map.width as isize) && starty+(j as isize) >=0 && starty+(j as isize) < (map.height as isize) {
+            for i in 0..15 {
+                for j in 0..15 {
+                    if startx+i >= 0 && startx+(i as isize) < (map.width as isize) && starty+(j as isize) >= 0 && starty+(j as isize) < (map.height as isize) {
                         //get the tile from the map
                         let index= ((starty +j) * (map.width as isize)+ (startx+i)) as usize;
                         let tiles = map.tiles.read().unwrap();
@@ -839,16 +961,11 @@ impl MapScreen {
                         ter.push(ScreenTerrain::new(tile.tile.clone()));
                         match tile.user {
                             Some(u) => {
+                                //Subtract an extra -1 to put it in the middle of the screen (on
+                                //screen objects use 0-13, terrain 0-15
                                 obj.push(ScreenObject::new(u.get_tile(), (i-1) as u8, (j-1) as u8));
                             },
                             None => {},
-                        }
-                        match tile.projectile {
-                            Some(p) => {
-                                obj.push(ScreenObject::new(p.get_tile(), (i-1) as u8, (j-1) as u8));
-                            },
-                            None => {},
-
                         }
                     } else {
                         ter.push(empty.clone());

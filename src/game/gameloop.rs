@@ -51,15 +51,24 @@ pub struct GameLoop {
 
 impl GameLoop {
     ///creates a new game loop
-    pub fn new(mapname : &str, send: Sender<Msg>) -> GameLoop {
-        let mut gloop = GameLoop {
-            game_map: Arc::new(RwLock::new(GameMap::new(mapname).unwrap())),
-            connections: Arc::new(RwLock::new(vec![])),
-            command_queue: Arc::new(Mutex::new(vec![])),
-            to_game_send: send,
-        };
-        gloop.start();
-        gloop
+    pub fn new(mapname : &str, send: Sender<Msg>) -> Option<GameLoop> {
+        let map = GameMap::new(mapname);
+        match map {
+            Err(s) => {
+                println!("{}", s);
+                None
+            }, 
+            Ok(map) => {
+                let mut gloop = GameLoop {
+                    game_map: Arc::new(RwLock::new(map)),
+                    connections: Arc::new(RwLock::new(vec![])),
+                    command_queue: Arc::new(Mutex::new(vec![])),
+                    to_game_send: send,
+                };
+                gloop.start();
+                Some(gloop)
+            }
+        }
     }
     
     
@@ -78,19 +87,18 @@ impl GameLoop {
         let commands = self.command_queue.clone();
         let to_mio = self.to_game_send.clone();
         thread::spawn(move || {
-           //TODO give this sender to someone.
            loop {
                thread::sleep(Duration::from_millis(20));
                let mut map = game_map.write().unwrap();
                //This can cause DOS by keeping the commands from executing
-               println!("Reading commands");
+               //println!("Reading commands");
                //Putting this in a scope so that the commands can be repopulated when it is executing.
                {
                     let mut c = commands.lock().unwrap();
                     for m in c.drain(..) {
                         match m {
                             Msg::Command(token, command) => {
-                                //println!("{}", command);
+                                println!("{}", command);
                                 &map.push_command(token.clone(), command.clone()); 
                             },
                             _ => {
@@ -104,13 +112,13 @@ impl GameLoop {
                let responses = map.execute(&mutex);
                //Cannot seem to decontruct tuples in a loop. Doing the index version instead of
                //iterating
-               println!("Reading Responses");
+               //println!("Reading Responses");
                for i in 0..responses.len() {
                    let (token, style, response) = responses[i].clone();
                    to_mio.send(Msg::TextOutput(token, style, response));
                }
                //send map & health updates
-               println!("Sending map");
+               //println!("Sending map");
                for conn in mutex.iter() {
                    let hp = map.get_hp(conn.clone());
                    if hp.is_some() {
@@ -125,7 +133,7 @@ impl GameLoop {
                        None => {},
                    }
                }
-               println!("Finished Loop");
+               //println!("Finished Loop");
            }
         });
     }

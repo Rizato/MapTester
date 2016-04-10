@@ -19,6 +19,7 @@ pub mod conn;
 extern crate mio;
 extern crate flate2;
 extern crate time;
+extern crate xml;
 
 use conn::server::Server;
 

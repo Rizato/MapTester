@@ -11,6 +11,7 @@ byteorder = "0.4.2"
 bytes = "0.3.0"
 time = "0.1"
 slab   = "0.1.0"
+xml-rs = "0.3"
 
 [[bin]]
 

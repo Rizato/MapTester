@@ -24,11 +24,13 @@ pub mod characters;
 
 use std::io::prelude::*;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry::{Vacant, Occupied};
 use std::sync::Arc;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::BufReader;
 use std::sync::mpsc::{channel, Sender};
+use std::sync::Mutex;
 
 use game::gameloop::GameLoop;
 use conn::server::{Server, Msg};
@@ -37,7 +39,7 @@ use conn::server::{Server, Msg};
 ///This just has a hashmap of gameloops, and maps of game loops, and also holds all of the tile
 ///mappings
 pub struct Game {
-    game_loops: HashMap<String, Arc<RefCell<GameLoop>>>,
+    game_loops: Mutex<HashMap<String, Arc<RefCell<GameLoop>>>>,
     pub mappings: HashMap<String, i16>,
     pub send: Sender<Msg>,
 }
@@ -56,7 +58,7 @@ impl Game {
             line.clear();
         }
         Game {
-            game_loops: HashMap::new(),
+            game_loops: Mutex::new(HashMap::new()),
             mappings: m,
             send: send,
         }
@@ -64,11 +66,27 @@ impl Game {
 
     ///Creates a new game loop with the given name, or finds it already in the hashmap. Starts the
     ///game loop if the map is created.
-    pub fn get_or_create_game_loop(&mut self, map_name: &str) -> Arc<RefCell<GameLoop>> {
+    pub fn get_or_create_game_loop(&mut self, map_name: &str) -> Option<Arc<RefCell<GameLoop>>> {
         println!("{}", map_name);
         //This can handle all kinds of things. Checks last time user was inside, if too long it recreates. 
         //Checks the hashmap for the Gameloop. If not there, it creates a new one, adds it and returns it.
-        let game_loop = self.game_loops.entry(map_name.to_string()).or_insert(Arc::new(RefCell::new(GameLoop::new(map_name, self.send.clone()))));
-        game_loop.clone()
+        let mut loops = self.game_loops.lock().unwrap();
+        match loops.entry(map_name.to_string()) {
+            Vacant(blank) => {
+                match GameLoop::new(map_name, self.send.clone()) {
+                    Some(game) => {
+                        let full = Arc::new(RefCell::new(game));
+                        blank.insert(full.clone());
+                        Some(full)
+                    },
+                    None =>{
+                        None
+                    },
+                }
+            },
+            Occupied(map) => {
+                Some(map.get().clone())
+            },
+        }
     }
 }
