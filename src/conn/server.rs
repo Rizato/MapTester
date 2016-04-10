@@ -693,11 +693,27 @@ impl Api for Connection {
         for terrain in screen.terrain.iter() {
             match self.games.borrow_mut().mappings.get(&terrain.tile) {
                 Some(tile) => {
-                    Connection::write_i32_reversed(&mut uncompressed, tile.clone() as i32);
+                    //Adding borders
+                    let mut priority = 0;
+                    if terrain.tile.contains("grass") {
+                        priority = (1 as u32) << 17; 
+                    } else if terrain.tile.contains("shallow") {
+                        priority = (2 as u32) << 17;
+                    } else if terrain.tile.contains("water") {
+                        priority = (3 as u32) << 17;
+                    } else if terrain.tile.contains("trees") || terrain.tile.contains("forest"){
+                        priority = (4 as u32) << 17;
+                    } else {
+                        priority = (0 as u32) << 17;
+                    }
+                    //Telling all tiles to allow borders (sadly the borders have to be a higher
+                    //priority, so I do the priority work above
+                    let t = tile.clone() as u32 | priority | (1  as u32) << 31 | (1 as u32) << 30 | (1 as u32) << 29;
+                    Connection::write_i32_reversed(&mut uncompressed, t as i32);
                 },
                 None => {
                     //Writing an invalid tile so it just shows the dot pattern
-                    Connection::write_i32_reversed(&mut uncompressed, 9999);
+                    Connection::write_i32_reversed(&mut uncompressed, 9999 as i32);
                 },
             }
         }
