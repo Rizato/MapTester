@@ -93,6 +93,9 @@ impl GameMap {
                 let mut tiles: Vec<MapTile> = vec![];
                 let mut width: u8 = 0;
                 let mut height: u8 = 0;
+                let mut start_x: u8 = 0;
+                let mut start_y: u8 = 0;
+                let mut out_of_bounds_tile = String::new();
                 for event in parser {
                     match event { 
                         Ok(XmlEvent::StartElement {name, attributes, ..}) => {
@@ -131,8 +134,9 @@ impl GameMap {
                             } else if name.local_name == "arch" {
                                 println!("Arch");
                                 if header {
-                                    let mut terrain: String = String::new();
+                                    let mut terrain = String::new();
                                     let mut is_terrain = false;
+                                    let mut is_oob = false;
                                     for attr in attributes {
                                         //TODO Handle out of bounds terrain.
                                         println!("head-arch {}", attr.name.local_name);
@@ -141,14 +145,19 @@ impl GameMap {
                                                 is_terrain = true;
                                         } else if attr.name.local_name == "path" { 
                                             terrain = attr.value.clone();
-                                            println!("Background: {}", terrain);
+                                        } else if attr.name.local_name == "name" &&
+                                         attr.value == "oob-terrain" {
+                                            is_oob = true;
                                         }
                                     }
                                     if is_terrain {
                                         let size = width as u32 * height as u32;
                                         for x in 0..size {
-                                            tiles.push(MapTile::new(terrain.clone()));
+                                            let mut tile = MapTile::new(terrain.clone());
+                                            tiles.push(tile);
                                         }
+                                    } else if is_oob {
+                                        out_of_bounds_tile = terrain;
                                     }
                                 } else {
                                     //TODO
@@ -183,8 +192,24 @@ impl GameMap {
                                         for y in rect_y..(rect_y+rect_h) {
                                             let index: usize = (y as usize * width as usize) as usize + x as usize;
                                             tiles[index].tile = terrain.clone();
+                                            tiles[index].blocked = false;
                                         }
                                     }
+                                }
+                            } else if name.local_name == "int" {
+                                let mut name = String::new(); 
+                                let mut val = 0;
+                                for attr in attributes {
+                                    if attr.name.local_name == "name" {
+                                        name = attr.value;
+                                    } else if attr.name.local_name == "value" {
+                                        val = attr.value.parse::<u8>().unwrap();
+                                    }
+                                }
+                                if name.contains("startX") {
+                                    start_x = val;
+                                } else if name.contains("startY") {
+                                    start_y = val;
                                 }
                             }
                         },
@@ -192,6 +217,12 @@ impl GameMap {
                             if name.local_name == "header" {
                                 println!("End header");
                                 header = false;
+                                for index in 0..tiles.len() {
+                                    println!("{} {}", tiles[index].tile, out_of_bounds_tile);
+                                    if tiles[index].tile == out_of_bounds_tile {
+                                        tiles[index].blocked = true;
+                                    }
+                                }
                             }
                         },
                         _ => {
@@ -203,8 +234,8 @@ impl GameMap {
                     width: width,
                     height: height,
                     tiles: Arc::new(RwLock::new(tiles)),
-                    start_x : 1,
-                    start_y : 1,
+                    start_x : start_x,
+                    start_y : start_y,
                 })
             },
         }
@@ -677,6 +708,7 @@ impl GameMap {
     ///it exectures on the game loop & stops everything while it searches. If the x direction is
     ///full, it will take forever.
     fn add_player_at(&mut self, user: MapUser, x: u8, y: u8, direction: Direction) -> bool {
+        println!("adding at {} {}", x, y);
         let mut start_user = None;
         let mut blocked = false;
         if x >= 0 && x < self.width && y >=0 && y < self.height {
