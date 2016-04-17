@@ -20,6 +20,7 @@ extern crate mio;
 
 use game::characters::Controllable;
 use game::characters::Direction;
+use game::characters::ControllableType;
 use game::gamemap::GameMap;
 
 use std::collections::HashMap;
@@ -185,7 +186,7 @@ fn hueristic(width: u8, start: u32, end: u32) -> u32{
 }
 
 ///Returns the found neighbors to a given index. Does one up, down, left and right.
-fn find_neighbors(index: u32, width: u8, height: u8, blocked: &Vec<bool>) -> Vec<u32> {
+    fn find_neighbors(index: u32, width: u8, height: u8, blocked: &Vec<bool>) -> Vec<u32> {
         let x = index % width as u32;
         let y = index / width as u32;
         let mut neighbors = vec![];
@@ -398,5 +399,11 @@ impl Controllable for Player {
     ///Puts an absolute X, Y as the movement goal for this mapuser
     fn set_movement(&mut self, end: u32) {
         self.movement = Some(end);
+    }
+
+    fn modify_connected_tiles(&mut self, width: u8, height: u8, objects : &Vec<bool>) {}
+
+    fn get_type(&self) -> ControllableType {
+        ControllableType::Player
     }
 }

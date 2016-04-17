@@ -17,6 +17,7 @@ limitations under the License.*/
 extern crate mio;
 
 use game::characters::Controllable;
+use game::characters::ControllableType;
 use game::characters::Direction;
 use game::gamemap::GameMap;
 
@@ -76,9 +77,7 @@ impl Controllable for Item {
     ///Checks to see if this value blocks the index in question. This does not take into account
     ///size of the artwork (Which I don't have access to on the server).
     fn does_block_index(&self, index: u32) -> bool {
-        //self.index == index
-        //This is temporary, until I actually implement Roads & teleporters
-        false
+        self.index == index
     }
 
     /// Whether or not to show this object. This obviously fails for very large objects that are
@@ -97,5 +96,11 @@ impl Controllable for Item {
     
     ///Puts an absolute X, Y as the movement goal for this mapuser
     fn set_movement(&mut self, end: u32) {
+    }
+
+    fn modify_connected_tiles(&mut self, width: u8, height: u8,  objects : &Vec<bool>) {}
+
+    fn get_type(&self) -> ControllableType {
+        ControllableType::Item
     }
 }

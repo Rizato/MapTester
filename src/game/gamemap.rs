@@ -18,9 +18,11 @@ extern crate slab;
 extern crate xml;
 
 use game::characters::Controllable;
+use game::characters::ControllableType;
 use game::characters::Direction;
 use game::characters::player::Player;
 use game::characters::item::Item;
+use game::characters::connected::RoadWall;
 use game::characters::tower::Tower;
 use game::characters::projectile::Projectile;
 
@@ -207,7 +209,11 @@ impl GameMap {
                                                 let mut t = tile.replace("structures", "statics");
                                                 t = t.replace("dirt_road", "DirtRoad");
                                                 t = t.replace("bridge", "Bridge");
-                                                objects.push(Box::new(Item::new(t, index)));
+                                                if t.contains("roads") || t.contains("walls") {
+                                                    objects.push(Box::new(RoadWall::new(t, index)));
+                                                } else { 
+                                                    objects.push(Box::new(Item::new(t, index)));
+                                                }
                                             }
                                         }
                                     }
@@ -242,6 +248,34 @@ impl GameMap {
                         _ => {
 
                         },
+                    }
+                }
+                //Telling roads & walls to draw based on surrounding tiles
+                let mut roads = vec![false; tiles.len()];
+                let mut wall = vec![false; tiles.len()];
+                let len = objects.len();
+                for i in 0..len {
+                    let ref mut object = objects[i];
+                    match object.get_type() {
+                        ControllableType::Road => {
+                            roads[object.get_location() as usize] = true;
+                        },
+                        ControllableType::Wall => {
+                            wall[object.get_location() as usize] = true;
+                        },
+                        _ => {},
+                    }
+                }
+                for i in 0..len {
+                    let ref mut object = objects[i];
+                    match object.get_type() {
+                        ControllableType::Road => {
+                            object.modify_connected_tiles(width, height, &roads);
+                        },
+                        ControllableType::Wall=>{
+                            object.modify_connected_tiles(width, height, &wall);
+                        },
+                        _ => {},
                     }
                 }
                 Ok(GameMap{

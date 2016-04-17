@@ -17,11 +17,13 @@ limitations under the License.*/
 extern crate mio;
 
 pub mod player;
+pub mod connected;
 pub mod item;
 pub mod tower;
 pub mod projectile;
 
 use game::gamemap::GameMap;
+
 
 /// Enum for the direction that a moveable object just went. Gets sent to the connection when
 /// deciding what tile to draw.
@@ -36,6 +38,13 @@ pub enum Direction {
     NorthEast,
     SouthWest,
     SouthEast,
+}
+
+pub enum ControllableType{
+    Road,
+    Wall,
+    Player,
+    Item,
 }
 
 ///This trait is used to define a set of functions for moveable objects. Helps with pathfinding.
@@ -57,5 +66,7 @@ pub trait Controllable {
     fn hurt(&mut self, damage: i32);
     fn set_movement(&mut self, end: u32); 
     fn push_command(&mut self, command: String);
-
+    //Is this the best way to do the modifications? Typically objects store their own index.
+    fn modify_connected_tiles(&mut self, width: u8, height: u8,  objects : &Vec<bool>);
+    fn get_type(&self) -> ControllableType;
 }
