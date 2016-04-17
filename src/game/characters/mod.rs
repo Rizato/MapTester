@@ -14,7 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.*/
 /// This module just declares the Moveable trait. 
 
+extern crate mio;
+
 pub mod player;
+pub mod item;
 pub mod tower;
 pub mod projectile;
 
@@ -37,24 +40,22 @@ pub enum Direction {
 
 ///This trait is used to define a set of functions for moveable objects. Helps with pathfinding.
 pub trait Controllable {
-    ///This will do the pathfinding, and give the next location for the player
-    fn path_next(map: &GameMap, start: u32, end: u32) -> Option<u32>;
-    ///This gives an estimate for the total, for use in the hueristic
-    fn hueristic(width: u8, start: u32, end: u32) -> u32;
-    ///Returns a vector of indeices for valid neighbors
-    fn find_neighbors(index: u32, map: &GameMap) -> Vec<u32>;
-    ///Grabs the command
-    fn get_command(&mut self) -> Option<String>;
-    ///Removes the movement value if there is one
-    fn clear_movement_if_at_destination(&mut self, end: u32);
-    ///Sets a movement position for an object
-    fn set_movement(&mut self, end: u32);
-    ///Adds a command to the queue
-    fn push_command(&mut self, command: String);
-    ///Returns the tile artwork for the character
+    ///Called every game loop to update it
+    fn update(&mut self, width: u8, height: u8, blocked: &Vec<bool>) -> Option<Vec<(mio::Token, u8, String)>>; 
+    ///Used when drawing the screen
+    fn get_location(&self) -> u32;
+    ///Gets the artwork
     fn get_tile(&self) -> String;
-    ///Returns true if this is a moving object
-    fn does_move(&self) -> bool;
-    ///Sets the controllable's direction
-    fn set_direction(&mut self, dir: Direction);
+    ///Gets the Item size
+    fn get_size(&self) -> (u32, u32);
+    ///Get the token
+    fn get_token(&self) -> Option<mio::Token>;
+    fn get_hp(&self) -> Option<i32>;
+    fn set_location(&mut self, index: u32);
+    fn does_block_index(&self, index: u32) -> bool;
+    fn is_visible(&self, center: u32, map: &GameMap) -> bool;
+    fn hurt(&mut self, damage: i32);
+    fn set_movement(&mut self, end: u32); 
+    fn push_command(&mut self, command: String);
+
 }
