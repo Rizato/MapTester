@@ -25,6 +25,7 @@ use game::characters::item::Item;
 use game::characters::connected::RoadWall;
 use game::characters::tower::Tower;
 use game::characters::projectile::Projectile;
+use game::Game;
 
 use std::sync::RwLock;
 use std::sync::Arc;
@@ -102,6 +103,7 @@ impl GameMap {
                 let mut start_x: u8 = 0;
                 let mut start_y: u8 = 0;
                 let mut out_of_bounds_tile = String::new();
+                let tile_mappings = Game::create_mappings();
                 for event in parser {
                     match event { 
                         Ok(XmlEvent::StartElement {name, attributes, ..}) => {
@@ -144,7 +146,6 @@ impl GameMap {
                                     let mut is_terrain = false;
                                     let mut is_oob = false;
                                     for attr in attributes {
-                                        //TODO Handle out of bounds terrain.
                                         println!("head-arch {}", attr.name.local_name);
                                         if attr.name.local_name == "name" &&
                                             attr.value == "terrain" {
@@ -166,7 +167,6 @@ impl GameMap {
                                         out_of_bounds_tile = terrain;
                                     }
                                 } else {
-                                    //TODO
                                     //Read the loc. 
                                     //If it is a rectangle, apply that tile to the
                                     //  entire area as the terrain.
@@ -206,13 +206,16 @@ impl GameMap {
                                         for x in rect_x..(rect_x+rect_w) {
                                             for y in rect_y..(rect_y+rect_h) {
                                                 let index: u32 = (y as u32 * width as u32 ) as u32 + x as u32;
-                                                let mut t = tile.replace("structures", "statics");
-                                                t = t.replace("dirt_road", "DirtRoad");
-                                                t = t.replace("bridge", "Bridge");
-                                                if t.contains("roads") || t.contains("walls") {
-                                                    objects.push(Box::new(RoadWall::new(t, index)));
+                                                //This is a special case. The map editor treats the
+                                                //main road as terrain
+                                                if tile.contains("main_road") {
+                                                    tiles[index as usize].blocked = false;
+                                                }
+                                                //TODO doors & windows
+                                                if tile.contains("roads") || tile.contains("walls") { 
+                                                    objects.push(Box::new(RoadWall::new(tile.clone(), &tile_mappings, index)));
                                                 } else { 
-                                                    objects.push(Box::new(Item::new(t, index)));
+                                                    objects.push(Box::new(Item::new(tile.clone(), index)));
                                                 }
                                             }
                                         }
@@ -612,6 +615,8 @@ impl ScreenTerrain {
             priority = (3 as u32) << 17;
         } else if self.tile.contains("trees") || self.tile.contains("forest") {
             priority = (4 as u32) << 17;
+        } else if self.tile.contains("lava") {
+            priority = (10000 as u32) << 17;
         } else {
             priority = (0 as u32) << 17;
         }

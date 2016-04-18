@@ -47,6 +47,14 @@ pub struct Game {
 impl Game {
     ///Creates a new game struct. Initilizes a new hashmap, and reads the tile map file.
     pub fn new(send: Sender<Msg>) -> Game {
+        Game {
+            game_loops: Mutex::new(HashMap::new()),
+            mappings: Game::create_mappings(),
+            send: send,
+        }
+    }
+
+    pub fn create_mappings() -> HashMap<String, i16> {
         let mut m: HashMap<String,i16> = HashMap::new();  
         let tile_file = File::open("file_full").unwrap(); 
         let mut reader = BufReader::new(tile_file);
@@ -57,11 +65,7 @@ impl Game {
             count = count + 1;
             line.clear();
         }
-        Game {
-            game_loops: Mutex::new(HashMap::new()),
-            mappings: m,
-            send: send,
-        }
+        m
     }
 
     ///Creates a new game loop with the given name, or finds it already in the hashmap. Starts the

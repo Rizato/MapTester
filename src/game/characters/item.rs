@@ -33,8 +33,12 @@ pub struct Item {
 
 impl Item {
     pub fn new(tile: String, index: u32) -> Item {
+        //Random tiles that need to be hardcoded
+        let mut t = tile.replace("structures", "statics");
+        t = t.replace("volcano", "volcano.1");
+        t = t.replace("wiz/wyvern/hack/dungeon", "statics/well");
         Item {
-            tile: tile,
+            tile: t,
             index: index,
         }
     }
