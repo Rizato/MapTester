@@ -474,10 +474,20 @@ impl Connection{
                             self.write_ground_add("E - Swipe & Poison", "cast", "spells/poison/poison.1", 0, 0);
                             self.write_ground_add("W - Reveal", "cast", "spells/eyeball", 0, 0);
                             self.write_ground_add("Q - Fog","cast", "spells/fog/fog", 0,0);
+                        } else if self.name.starts_with("female_rogue") {
+                            self.write_stat_name("Sarabi the Reborn Ninja");
+                            self.write_inv_add("Claws","sell", "weapons/claws/knop/claws_hunter", 0,0);
+                            self.write_inv_add("Black Dragon Mail","sell", "armor/armor/black_dragon_mail", 0,0);
+                            self.write_inv_add("Lion Cloak","sell", "armor/cloak/lion_cloak", 0,0);
+                            //Writing pally spells
+                        } else {
+                            let name = self.name.clone();
+                            self.write_stat_name(&format!("{} the Wonderful Player", name));
                         }
+
                         
                         self.write_stat_gold(123456);
-                        self.write_stat_level(32, 8765534);
+                        self.write_stat_level(123, 8765534);
                         self.write_stat_all(200, 200, 100, 100, 25, 1000000, 3000000, 6, 10);
                         
                         println!("Tiles");
