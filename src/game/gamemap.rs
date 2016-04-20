@@ -613,7 +613,9 @@ impl ScreenTerrain {
             priority = (1 as u32) << 17;
         } else if self.tile.contains("water") {
             priority = (3 as u32) << 17;
-        } else if self.tile.contains("trees") || self.tile.contains("forest") {
+        } else if self.tile.contains("trees") 
+            || self.tile.contains("forest") 
+            || self.tile.contains("wall") {
             priority = (4 as u32) << 17;
         } else if self.tile.contains("lava") {
             priority = (10000 as u32) << 17;
