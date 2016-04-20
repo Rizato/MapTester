@@ -220,6 +220,7 @@ struct Connection {
     games: Arc<RefCell<Game>>,
     name: String,
     skin: String,
+    map: String,
     socket: TcpStream,
     token: mio::Token,
     to_client_queue: Vec<ByteBuf>,
@@ -234,6 +235,7 @@ impl Connection{
             socket: socket,
             name: "".to_string(),
             skin: "".to_string(),
+            map: "main".to_string(),
             token: token,
             to_client_queue: vec![],
             event_set: mio::EventSet::readable(),
@@ -254,7 +256,7 @@ impl Connection{
 
     fn quit(&mut self, event_loop: &mut mio::EventLoop<Server>) {
         println!("Quit parse");
-        match self.games.borrow_mut().get_or_create_game_loop("maps/main.map") {
+        match self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
             Some(game_loop) => {
                 game_loop.borrow_mut().remove(self.token.clone());
             },
@@ -311,11 +313,12 @@ impl Connection{
                                     },
                                     _ => {},
                                 }
-                            } else if command.starts_with("#skin ") && command.len() > 5 {
+                            } else if command.starts_with("skin ") && command.len() > 5 {
                                 match command.split(" ").next().unwrap().parse() {
                                     Ok(skin) => {
                                         self.skin = skin;
-                                        match self.games.borrow_mut().get_or_create_game_loop("maps/main.map") {
+                                        match
+                                            self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
                                             Some(game_loop) => {
                                                 game_loop.borrow_mut().send_command(Msg::Command(self.token.clone(),
                                                 command.to_string()));
@@ -326,25 +329,33 @@ impl Connection{
                                     },
                                     _ => {},
                                 }
-
-
+                            } else if command.starts_with("join ") && command.len() > 5 {
+                                let (ref a, ref map) = command.split_at(5);
+                                let ref mut games = self.games.borrow_mut();
+                                match games.get_or_create_game_loop(&format!("maps/{}.map", map)) {
+                                    Some(game_loop) => {
+                                        match games.get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
+                                            Some(old_loop) => {
+                                                old_loop.borrow_mut().remove(self.token.clone());
+                                            },
+                                            None => {},
+                                        }
+                                        game_loop.borrow_mut().join(self.token.clone(),
+                                        self.name.clone());
+                                        self.map = map.to_string().clone();
+                                    },
+                                    None =>{},
+                                }
                             } else if command.starts_with("shout ") && command.len() > 6 {
-
                                 let (ref a, ref msg) = command.split_at(6);
                                 let mut m = format!("{} shouts: {} ", self.name, msg).to_string();
                                 //Doing this the trivially easy way, just doing a notification for
                                 //that gets pushed to everyone
                                 let send = self.games.borrow_mut().send.clone();
                                 send.send(Msg::Shout(m));
-                            } else if command.starts_with("join ") && command.len() > 5 {
-                                let (ref a, ref msg) = command.split_at(6);
-                                //Check to see if the server exists
-                                //If map files exists it needs to create it.
-                                //Remove player from the old map. Add to the new.
-                                 
                             } else {
                                 //println!("Readable parse");
-                                match self.games.borrow_mut().get_or_create_game_loop("maps/main.map") {
+                                match self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map",self.map)) {
                                     Some(game_loop) => {
                                         game_loop.borrow_mut().send_command(Msg::Command(self.token.clone(),
                                         command.to_string()));
@@ -494,7 +505,7 @@ impl Connection{
                         self.reregister_writable(event_loop);
                         println!("Writable");
                         println!("Login parse");
-                        match self.games.borrow_mut().get_or_create_game_loop("maps/main.map") {
+                        match self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
                             Some(game_loop) => {
                                 game_loop.borrow_mut().join(self.token.clone(), self.name.clone());
                                 println!("Looped");
