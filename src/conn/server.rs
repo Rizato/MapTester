@@ -306,7 +306,9 @@ impl Connection{
                                                              usize);
                         if n >= 2+ length {
                             let command = std::str::from_utf8(&read[2..2+length]).unwrap();
-                            if command.starts_with("#tile") {
+                            if command.starts_with("end_key") {
+                                println!("End key hit");
+                            } else if command.starts_with("#tile") {
                                 match command.split(" ").next().unwrap().parse() {
                                     Ok(tile) => {
                                         self.write_tile(tile);
