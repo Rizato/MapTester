@@ -314,20 +314,15 @@ impl Connection{
                                     _ => {},
                                 }
                             } else if command.starts_with("skin ") && command.len() > 5 {
-                                match command.split(" ").next().unwrap().parse() {
-                                    Ok(skin) => {
-                                        self.skin = skin;
-                                        match
-                                            self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
-                                            Some(game_loop) => {
-                                                game_loop.borrow_mut().send_command(Msg::Command(self.token.clone(),
-                                                command.to_string()));
-                                            },
-                                            None => {},
-                                        }
-
+                                let (ref a, ref skin) = command.split_at(5);
+                                self.skin = skin.to_string();
+                                match
+                                    self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
+                                    Some(game_loop) => {
+                                        game_loop.borrow_mut().send_command(Msg::Command(self.token.clone(),
+                                        command.to_string()));
                                     },
-                                    _ => {},
+                                    None => {},
                                 }
                             } else if command.starts_with("join ") && command.len() > 5 {
                                 let (ref a, ref map) = command.split_at(5);
@@ -341,7 +336,7 @@ impl Connection{
                                             None => {},
                                         }
                                         game_loop.borrow_mut().join(self.token.clone(),
-                                        self.name.clone());
+                                        self.skin.clone());
                                         self.map = map.to_string().clone();
                                     },
                                     None =>{},

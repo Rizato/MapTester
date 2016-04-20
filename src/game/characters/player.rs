@@ -323,7 +323,7 @@ impl Controllable for Player {
                           Some(vec![(self.token.clone(), 5,  "No Path Found".to_string()); 1])
                       },
                   }
-              } else if command.starts_with("#skin "){
+              } else if command.starts_with("skin "){
                   let parts: Vec<&str> = command.split(" ").collect();
                   if parts.len() > 1 {
                       self.tile = format!("players/{}.", parts[1]);
