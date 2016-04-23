@@ -81,7 +81,9 @@ When using only stock images this is typically due to the path specified in XML 
 
 e.g. <arch path="/some/path.gif"/> but image file is /some/cool/path.gif.
 
-**Resolution:** Two options. Edit the map file and put the actual image path. Edit Item or the ScreenTerrain structs and hard-code a string replace.
+**Resolution:** Two options. Edit the map file and put the actual image path. Edit Item or the ScreenTerrain structs and hard-code a string replace. To find the actual name of the file, right click the tile in the map editor & select all properties. The important fields are archetype, the path in XML, and image. 
+
+![properties.png](https://bitbucket.org/repo/a6rebR/images/3302314735-properties.png)
 
 I should probably have some sort of separate file with all of the conversions, but for now it is just hard-coded.
 
