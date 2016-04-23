@@ -33,6 +33,7 @@ pub trait Api {
     fn write_quit(&mut self);
     fn write_tile_mappings(&mut self);
     fn write_tile(&mut self, tile: i16);
+    fn write_image(&mut self, image: &str);
     fn write_text_out(&mut self, style: u8, message: &str);
     fn write_zipped_screen(&mut self,screen: MapScreen);
     fn write_stat_name(&mut self, name: &str);

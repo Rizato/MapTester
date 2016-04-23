@@ -16,12 +16,13 @@ limitations under the License.*/
 extern crate mio;
 extern crate time;
 extern crate slab;
+extern crate glob;
 
 use game::gamemap::MapScreen;
 use game::Game;
 use conn::api::Api;
 
-
+use glob::glob;
 use mio::tcp::*;
 use mio::{TryRead, TryWrite};
 use mio::util::Slab;
@@ -33,6 +34,7 @@ use flate2::Compression;
 use flate2::write::ZlibEncoder;
 
 use std::io::prelude::*;
+use std::fs::File;
 use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::mpsc::{Sender, Receiver, channel};
@@ -337,6 +339,10 @@ impl Connection{
                                     },
                                     _ => {},
                                 }
+                            } else if command.starts_with("#img") && command.len() > 5 {
+                                let (_, ref img) = command.split_at(5);
+                                println!("{}", img);
+                                self.write_image(img);
                             } else if command.starts_with("skin ") && command.len() > 5 {
                                 //Changes the character skin. Passes on to game loop so the map can change
                                 //it on the player object as well.
@@ -513,7 +519,14 @@ impl Connection{
                             self.skin = self.name.clone();
                             self.write_stat_name(&format!("{} the Wonderful Player", name));
                         }
-                        
+                        for entry in glob("images/**/*.gif").unwrap() {
+                            match entry {
+                                Ok(img) => {
+                                   self.write_image(&img.file_stem().unwrap().to_str().unwrap().to_string());
+                                },
+                                _ => {},
+                            }
+                        }
                         self.write_stat_gold(123456);
                         self.write_stat_level(123, 8765534);
                         self.write_stat_all(200, 200, 100, 100, 25, 1000000, 3000000, 6, 10);
@@ -698,6 +711,29 @@ impl Api for Connection {
         //zipped contents
         tile.append(&mut compressed);
         self.to_client_queue.insert(0, ByteBuf::from_slice(&tile[..]));
+    }
+
+    fn write_image(&mut self, image: &str) {
+        let mut data:  Vec<u8> = vec![];
+        match File::open(format!("images/{}.gif",image)) {
+            Ok(mut file) => {
+                let mut buf = vec![];
+                match file.read_to_end(&mut buf) {
+                    Ok(len) => {
+                        Connection::write_header(&mut data, 17, (image.len() + 4 + len + 8) as i32);
+                        Connection::write_string(&mut data, image);
+                        Connection::write_i32(&mut data, len as i32);
+                        data.append(&mut buf);
+                        Connection::write_timestamp(&mut data);
+                        self.to_client_queue.insert(0, ByteBuf::from_slice(&data[..]));
+                        println!("Wrote tile");
+                    },
+                    _ => {},
+                }
+
+            },
+            _ => {},
+        }
     }
 
     fn write_tile(&mut self, tile: i16) {

@@ -22,6 +22,7 @@ pub mod gamemap;
 pub mod characters;
 
 
+use glob::glob;
 use std::io::prelude::*;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry::{Vacant, Occupied};
@@ -65,6 +66,16 @@ impl Game {
             m.insert(line.clone().trim().to_string(), count.clone());
             count = count + 1;
             line.clear();
+        }
+        for entry in glob("images/**/*.gif").unwrap() {
+            match entry {
+                Ok(img) => {
+                    m.insert(img.file_stem().unwrap().to_str().unwrap().to_string(), count);
+                    count = count + 1;
+                    println!("{} {}", img.display(), count);
+                },
+                _ => {},
+            }
         }
         m
     }

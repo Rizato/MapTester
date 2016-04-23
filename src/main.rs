@@ -21,6 +21,7 @@ extern crate mio;
 extern crate flate2;
 extern crate time;
 extern crate xml;
+extern crate glob;
 
 use conn::server::Server;
 

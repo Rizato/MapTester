@@ -179,7 +179,6 @@ impl GameMap {
                                         teleporter_map = name;
                                     }
                                 }
-                                println!("{}", teleporter_map);
                             } else if name.local_name == "arch" {
                                 if header {
                                     let mut terrain = String::new();

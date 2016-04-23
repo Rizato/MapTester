@@ -12,6 +12,7 @@ bytes = "0.3.0"
 time = "0.1"
 slab   = "0.1.0"
 xml-rs = "0.3"
+glob = "0.2.11"
 
 [[bin]]
 
