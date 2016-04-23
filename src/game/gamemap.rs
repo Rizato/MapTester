@@ -454,6 +454,11 @@ impl GameMap {
                             blocked[i] = self.tiles[i].blocked;
                         }
                     }
+                    //I hate that I generate a list of blocked tiles. I would rather 
+                    //pass a reference to the map objects, but I could not figure
+                    //out how to do that in rust, since it does not allow any
+                    //immutable borrows if there is a mutable borrow & the update
+                    //function itself requires a mutable borrow
                     match objects[i].update(width, height, &blocked) {
                         Some(responses) => {
                                 for x in 0..responses.len() {
