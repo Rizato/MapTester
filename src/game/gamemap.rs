@@ -36,7 +36,7 @@ use xml::reader::{EventReader, XmlEvent};
 use self::slab::Index;
 
 /// This module holds all the map related stuff. It has the GameMap itself, along with the
-/// MapScreen, ScreenObjects, 
+/// MapScreen, ScreenObjects, ScreenTerrain etc.  
 
 ///This is the map. It holds all of the terratin, and all of the objects and such. 
 ///It also holds the x,y of the start value. This is only temporary until I get objects for start
@@ -53,27 +53,15 @@ pub struct GameMap {
 }
 
 impl GameMap {
-    /// This currently creates a generic map. It will eventually load a map by filename and turn
-    /// that into a valid MapObject
+    ///This attemps to parse a file 
     pub fn new(mapname: &str) -> Result<GameMap, String> {
         if !GameMap::maps_exist(mapname) {
             return Err("Map Not Found".to_string());
         }
-        match GameMap::parse_tiles(mapname) {
-            Ok(map) => {
-                //Still throwing the tile in because right now it is setup for that. 
-                //let t_index = 405;
-                //map.tiles[t_index as usize].user = Some(MapUser::new(None,Commandable::T(Tower::new())));
-                //map.tiles[t_index as usize].blocked = true;
-                //let mut ti = Arc::new(RwLock::new(tiles));
-                Ok(map)
-            },
-            Err(s) => {
-                Err(s)
-            },
-        }
+        GameMap::parse_tiles(mapname)
     }
     
+    ///Checks to see if the map exists
     fn maps_exist(path: &str) -> bool {
         match File::open(path) {
             Err(_) => {
@@ -87,6 +75,8 @@ impl GameMap {
 
     /// This is without a doubt the most hideos part of the code, and there are a lot of hideous
     ///parts.
+    ///Basically, it opens the xml map file and parses it out. There are a few special sections that
+    ///it handles. Header, Terrain, Roads and Teleporters. 
     fn parse_tiles(path: &str) -> Result<GameMap, String>{
         println!("Parsing! {}", path);
         match File::open(path) {
@@ -94,9 +84,26 @@ impl GameMap {
                Err("Failed to parse".to_string()) 
             },
             Ok(file) => {
-                let buf = BufReader::new(file);
-                let parser = EventReader::new(buf);
+                //The map struct variables
+                let mut tiles: Vec<MapTile> = vec![];
+                let mut objects: Vec<Box<Controllable>> = vec![];
+                let mut teleporters: HashMap<u32, Teleporter>= HashMap::new();
+                let mut width: u8 = 0;
+                let mut height: u8 = 0;
+                let mut start_x: u8 = 0;
+                let mut start_y: u8 = 0;
+                
+                //Declaring a bunch of variables to temporarily store values that cannot
+                //be turned into structs until an object closes.
+                
+                //Because headers & teleporters are not complete until the object closes, they store the 
+                //required children values in these variables.
+                
+                //header
                 let mut header = false;
+                let mut out_of_bounds_tile = String::new();
+                
+                //teleporter
                 let mut teleporter = false;
                 let mut teleporter_index = 0;
                 let mut teleporter_use_default = false;
@@ -105,15 +112,11 @@ impl GameMap {
                 let mut teleporter_height = 1;
                 let mut teleporter_width = 1;
                 let mut teleporter_map = String::new();
-                let mut tiles: Vec<MapTile> = vec![];
-                let mut objects: Vec<Box<Controllable>> = vec![];
-                let mut teleporters: HashMap<u32, Teleporter>= HashMap::new(); 
-                let mut width: u8 = 0;
-                let mut height: u8 = 0;
-                let mut start_x: u8 = 0;
-                let mut start_y: u8 = 0;
-                let mut out_of_bounds_tile = String::new();
+                
+                //Values needed for the parser
                 let tile_mappings = Game::create_mappings();
+                let buf = BufReader::new(file);
+                let parser = EventReader::new(buf);
                 for event in parser {
                     match event { 
                         Ok(XmlEvent::StartElement {name, attributes, ..}) => {
@@ -150,6 +153,7 @@ impl GameMap {
                                     return Err("Invalid dimensions".to_string());
                                 }
                             } else if name.local_name == "bean" {
+                                //We don't do anything with this
                             } else if name.local_name == "boolean" {
                                 if teleporter {
                                     for attr in attributes {
@@ -469,6 +473,8 @@ impl GameMap {
         retval
     }
 
+    ///Checks for any players on teleporters. Returns a vector of tuples containing
+    ///the player token, the map name and a start x,y if specified by the teleporter
     pub fn do_teleports(&self) -> Vec<(mio::Token, String, Option<(u8,u8)>)> {
         let mut retval = vec![];
         let ref objects = self.objects;
@@ -696,6 +702,8 @@ impl ScreenTerrain {
         }
     }
 
+    ///To get fancy borders the tile has to have a priority assigned. I have
+    ///hardcoded some values here.
     pub fn get_priority(&self) -> u32 {
         let priority;
         if self.tile.contains("grass") {
@@ -739,6 +747,7 @@ impl MapScreen {
         let mut obj = vec![];
         //If coords are valid we will actually draw something
         let empty = ScreenTerrain::new("terrain/empty".to_string());
+        //creates array of tiles
         if map.width as u32 > x && map.height as u32 > y {
             for i in 0..15 {
                 for j in 0..15 {
@@ -756,6 +765,7 @@ impl MapScreen {
                 }
             }
         }
+        //Creates array of objects
         let ref objects = map.objects; 
         for i in 0..objects.len() {
             let ref object = objects[i];
@@ -774,6 +784,8 @@ impl MapScreen {
         }
     }
 
+    ///These are the terrain tiles I have found where the terrain path from xml
+    ///did not match the image path.
     fn convert_terrain(tile: String) -> String {
         if tile == "scenery/sign1" {
             "indoor/sign1".to_string()

@@ -54,6 +54,7 @@ impl Game {
         }
     }
 
+    ///Reads the file with the paths for all images. Assigns tiles by count.
     pub fn create_mappings() -> HashMap<String, i16> {
         let mut m: HashMap<String,i16> = HashMap::new();  
         let tile_file = File::open("file_full").unwrap(); 
@@ -68,8 +69,7 @@ impl Game {
         m
     }
 
-    ///Creates a new game loop with the given name, or finds it already in the hashmap. Starts the
-    ///game loop if the map is created.
+    ///Creates a new game loop with the given name, or finds it already in the hashmap.
     pub fn get_or_create_game_loop(&mut self, map_name: &str) -> Option<Arc<RefCell<GameLoop>>> {
         println!("{}", map_name);
         //This can handle all kinds of things. Checks last time user was inside, if too long it recreates. 

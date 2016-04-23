@@ -12,9 +12,11 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.*/
+
 /// This module declares the player object. 
 /// The player defines attributes such as the tile to represent the character,
-/// the health, mana pool, character name and speed
+/// the health, mana pool, character name and speed.
+///Player implements Controllable so that it can be updated from the gameloop
 
 extern crate mio;
 
@@ -43,7 +45,7 @@ pub struct Player{
     direction: Direction,
     commands: Vec<String>,
 }
-
+/// This defines the custom functions for player. This handles things like getting commands & mouse movement
 impl Player {
     pub fn new(tile: String, token: mio::Token) -> Player {
         Player {
@@ -259,7 +261,7 @@ fn hueristic(width: u8, start: u32, end: u32) -> u32{
     }
 }
 
-///Implements the A* pathfinding algorithm for the player
+///Implements the controllable trait for the player
 impl Controllable for Player {
     fn update(&mut self, width: u8, height: u8, blocked: &Vec<bool>) -> Option<Vec<(mio::Token, u8, String)>> {
        let c = self.get_command();
@@ -361,17 +363,14 @@ impl Controllable for Player {
         true
     }
 
-    ///This function subtracts from the hp of the player
     fn hurt(&mut self, damage: i32) {
         self.hp = if self.hp > damage {self.hp - damage} else {self.max_hp};
     }
 
-    ///Pushes a command to the command queue for the mapuser
     fn push_command(&mut self, command: String) {
         self.commands.insert(0, command);
     }
     
-    ///Puts an absolute X, Y as the movement goal for this mapuser
     fn set_movement(&mut self, end: u32) {
         self.movement = Some(end);
     }

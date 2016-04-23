@@ -23,7 +23,9 @@ use game::gamemap::GameMap;
 use std::collections::HashMap;
 
 
-///Defines the RoadWall struct.
+///Defines the RoadWall struct. This is used for either roads or walls.
+///These are special with their own struct because they will change art
+///depending on other roads around them.
 #[derive(Clone)]
 pub struct RoadWall{
     pub tile: String,
@@ -52,7 +54,7 @@ impl RoadWall {
         tile
     }
 
-    ///This section is hideos. The path attributes from the 
+    ///This section is hideous. The path attributes from the 
     ///mapmaker do not match 1:1 with image paths. As a
     ///result, I have to translate between them. While I 
     ///would prefer this to be a lookup, there are just too
@@ -110,12 +112,11 @@ impl RoadWall {
 }
 
 impl Controllable for RoadWall{
-    ///Called every game loop to update it
+    
     fn update(&mut self, _: u8, _: u8, _: &Vec<bool>) -> Option<Vec<(mio::Token, u8, String)>> {
         None
     }
-    ///Used when drawing the screen
-
+    
     fn get_location(&self) -> u32 {
         self.index
     }
@@ -124,8 +125,7 @@ impl Controllable for RoadWall{
         self.tile.clone()
     }
 
-    ///Gets the correct direction tile for roads. This well connect any RoadWall objects
-    ///of the same Road or Wall type.
+    
     fn modify_connected_tiles(&mut self, width: u8, height: u8, roadwalls: &Vec<bool>) {
         if self.tile.to_lowercase().contains("bridge") 
             || self.tile.to_lowercase().contains("door") {
@@ -180,7 +180,6 @@ impl Controllable for RoadWall{
         self.tile.push_str(&tile_append);
     }
 
-    ///This will tell if a tile is a road. True if road, false if wall. 
     fn get_type(&self) -> ControllableType {
         if self.tile.contains("roads") {
             ControllableType::Road
@@ -189,26 +188,22 @@ impl Controllable for RoadWall{
         }
     }
 
-    ///Gets the Item size
     fn get_size(&self) -> (u32, u32) {
         (1,1)
     }
 
-    ///Get the server token. As a non-player item, it has none.
     fn get_token(&self) -> Option<mio::Token> {
         None
     }
-    ///Grabs the current hp value. Has none.
+    
     fn get_hp(&self) -> Option<i32> {
         None
     }
-    ///Changes the location on the map. 
+ 
     fn set_location(&mut self, index: u32) {
         self.index = index;
     }
 
-    ///Checks to see if this value blocks the index in question. This does not take into account
-    ///size of the artwork (Which I don't have access to on the server).
     fn does_block_index(&self, index: u32) -> bool {
         if self.index == index {
             match self.get_type() {
@@ -223,22 +218,17 @@ impl Controllable for RoadWall{
             false
         }
     }
-
-    /// Whether or not to show this object. This obviously fails for very large objects that are
-    ///off screen. Maybe I will handle that. 
+ 
     fn is_visible(&self, _: &GameMap) -> bool {
         true
     }
 
-    ///This function subtracts from the hp of the player
     fn hurt(&mut self, _: i32) {
     }
 
-    ///Pushes a command to the command queue for the mapuser
     fn push_command(&mut self, _: String) {
     }
     
-    ///Puts an absolute X, Y as the movement goal for this mapuser
     fn set_movement(&mut self, _: u32) {
     }
 }

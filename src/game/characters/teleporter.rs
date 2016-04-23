@@ -52,60 +52,48 @@ impl Teleporter {
 }
 
 impl Controllable for Teleporter{
-    ///Called every game loop to update it
+    
     fn update(&mut self, _: u8, _: u8, _: &Vec<bool>) -> Option<Vec<(mio::Token, u8, String)>> {
         None
     }
-    ///Used when drawing the screen
 
     fn get_location(&self) -> u32 {
         self.index
     }
 
-    ///Gets the artwork
     fn get_tile(&self) -> String {
         "".to_string()
     }
 
-    ///Gets the teleporter size
     fn get_size(&self) -> (u32, u32) {
         (1,1)
     }
 
-    ///Get the server token. As a non-player item, it has none.
     fn get_token(&self) -> Option<mio::Token> {
         None
     }
-    ///Grabs the current hp value. Has none.
     fn get_hp(&self) -> Option<i32> {
         None
     }
-    ///Changes the location on the map. 
+ 
     fn set_location(&mut self, index: u32) {
         self.index = index;
     }
 
-    ///Checks to see if this value blocks the index in question. This does not take into account
-    ///size of the artwork (Which I don't have access to on the server).
     fn does_block_index(&self, _: u32) -> bool {
         false
     }
-
-    /// Whether or not to show this object. This obviously fails for very large objects that are
-    ///off screen. Maybe I will handle that. 
+ 
     fn is_visible(&self, _: &GameMap) -> bool {
         false
     }
 
-    ///This function subtracts from the hp of the player
     fn hurt(&mut self, _: i32) {
     }
 
-    ///Pushes a command to the command queue for the mapuser
     fn push_command(&mut self, _: String) {
     }
     
-    ///Puts an absolute X, Y as the movement goal for this mapuser
     fn set_movement(&mut self, _: u32) {
     }
 

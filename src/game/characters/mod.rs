@@ -39,6 +39,7 @@ pub enum Direction {
     SouthEast,
 }
 
+///This is used to indicate the type, since there is no instanceOf in rust
 pub enum ControllableType{
     Road,
     Wall,
@@ -59,14 +60,23 @@ pub trait Controllable {
     fn get_size(&self) -> (u32, u32);
     ///Get the token
     fn get_token(&self) -> Option<mio::Token>;
+    ///gets the current HP, if any
     fn get_hp(&self) -> Option<i32>;
+    ///moves an object
     fn set_location(&mut self, index: u32);
+    ///true if blocks player movement
     fn does_block_index(&self, index: u32) -> bool;
+    ///whether or not to try to draw this on the MapScreen
     fn is_visible(&self, map: &GameMap) -> bool;
+    ///Reduces a targets HP by damage (if supported)
     fn hurt(&mut self, damage: i32);
+    ///Sets the end location for some movement
     fn set_movement(&mut self, end: u32); 
+    ///Adds a command to the queue
     fn push_command(&mut self, command: String);
-    //Is this the best way to do the modifications? Typically objects store their own index.
+    ///Gets the correct direction tile for roads. This well connect any RoadWall objects
+    ///of the same Road or Wall type.
     fn modify_connected_tiles(&mut self, width: u8, height: u8,  objects : &Vec<bool>);
+    ///Returns a type because rust does not have instanceOf.
     fn get_type(&self) -> ControllableType;
 }

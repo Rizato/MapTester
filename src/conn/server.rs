@@ -97,6 +97,7 @@ impl mio::Handler for Server {
     type Timeout = mio::Token;
     type Message = ();
 
+    ///Every timeout we read the channel to find any responses sent to the server.
     fn timeout(&mut self, event_loop: &mut mio::EventLoop<Server>, _: mio::Token) {
         loop {
             match self.recv.try_recv() {
@@ -164,6 +165,8 @@ impl mio::Handler for Server {
         let _ = event_loop.timeout_ms(TIMEOUT, 1);
     }
 
+    ///This directs incoming messages to the proper function. It will either open a new connection,
+    ///close a connection, or just pass the event on to an existing connection.
     fn ready(&mut self, event_loop: &mut mio::EventLoop<Server>, token: mio::Token, events: mio::EventSet){
         match token {
             //If this connection comes from the server, that means it is a new connection being
@@ -208,16 +211,8 @@ impl mio::Handler for Server {
 
 /// The connection implements some RPC protocol, as well as interfaces with the client. 
 ///
-/// It basically keeps two queues. One for input and one for output. The input one is done anytime
-/// something comes from the user. The output comes from the notify method of the server. This can
-/// be triggered at any time, but when something is added to it, it will trigger a write out to the
-/// client.
-///
-/// It holds a reference to the game, so that it can grab a game loop and such. 
-///
-/// It also holds the player I guess. I don't actually think that will be the case in later
-/// versions. Player will be something created when the user connects. (Probably based on the class
-/// they select.)
+/// It holds the queue of input from the user and defines a bunch of functions like chaning maps
+///sending commands, quitting, and talking back to the client.
 struct Connection {
     games: Arc<RefCell<Game>>,
     name: String,
@@ -245,6 +240,7 @@ impl Connection{
         }
     }
 
+    ///Handles some cleanup if the user disconnects.
     fn quit(&mut self, _: &mut mio::EventLoop<Server>) {
         println!("Quit parse");
         match self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
@@ -255,6 +251,8 @@ impl Connection{
         }
     }
 
+    ///Joins a map. Handles leaving the old map gracefully. If it cannot join the new map,
+    ///it will attempt to rejoin
     fn join(&mut self, map: &str, index: Option<(u8,u8)>) {
         let ref mut games = self.games.borrow_mut();
         match games.get_or_create_game_loop(&format!("maps/{}.map", map)) {
@@ -286,6 +284,7 @@ impl Connection{
         }
     }
 
+    ///Tells the connection to read a command, write to client, or handle login.
     fn ready(&mut self, event_loop: &mut mio::EventLoop<Server>){
         //If readable && not logged in, send it to login
         // elif readable && logged in send to command reader (which will send to game_loop or chat)
@@ -308,6 +307,7 @@ impl Connection{
         }
     }
     
+    ///Reads commands from the client. Can handle commands up to 4k in length. Redirects based on the text of the command.
     fn readable(&mut self, event_loop: &mut mio::EventLoop<Server>) {
         let mut read = Vec::with_capacity(4096);
         match self.socket.try_read_buf(&mut read) {
@@ -325,9 +325,12 @@ impl Connection{
                                                              usize);
                         if n >= 2+ length {
                             let command = std::str::from_utf8(&read[2..2+length]).unwrap();
+                            //Because I took a shortcut and use the command "end <index>" as an internal command
+                            //I had to intercept the end_key early.
                             if command.starts_with("end_key") {
                                 println!("End key hit");
                             } else if command.starts_with("#tile") {
+                                //Sends any missing tile art to the client
                                 match command.split(" ").next().unwrap().parse() {
                                     Ok(tile) => {
                                         self.write_tile(tile);
@@ -335,6 +338,8 @@ impl Connection{
                                     _ => {},
                                 }
                             } else if command.starts_with("skin ") && command.len() > 5 {
+                                //Changes the character skin. Passes on to game loop so the map can change
+                                //it on the player object as well.
                                 let (_, ref skin) = command.split_at(5);
                                 self.skin = skin.to_string();
                                 match
@@ -346,9 +351,11 @@ impl Connection{
                                     None => {},
                                 }
                             } else if command.starts_with("join ") && command.len() > 5 {
+                                //Join a new map
                                 let (_, ref map) = command.split_at(5);
                                 self.join(map, None);
                             } else if command.starts_with("shout ") && command.len() > 6 {
+                                //Shouts to all users. 
                                 let (_, ref msg) = command.split_at(6);
                                 let m = format!("{} shouts: {} ", self.name, msg).to_string();
                                 //Doing this the trivially easy way, just doing a notification for
@@ -382,6 +389,8 @@ impl Connection{
         }
     }
     
+    ///Writes from the queue back to the client. Expects messages that were passed
+    ///through some function in the api trait.
     fn writable(&mut self, event_loop: &mut mio::EventLoop<Server>) {
         let mut buf = self.to_client_queue.pop().unwrap();
         match self.socket.try_write_buf(&mut buf) {
@@ -411,6 +420,8 @@ impl Connection{
         }
     }
     
+    ///Handles the login message from the client. Doesn't do much with most of it. Does
+    ///some random funness with certain character names. 
     fn login(&mut self, event_loop: &mut mio::EventLoop<Server>) {
         //Do Login stuff
         let mut buf:Vec<u8> = Vec::with_capacity(150);
@@ -455,8 +466,9 @@ impl Connection{
                         //Send tile mappings for artwork
                         self.write_tile_mappings();
                         println!("Adding items");
-                        if self.name.starts_with("paladin") {
+                        if self.name.starts_with("Rizato") {
                             //Writing paladin specific stats
+                            self.skin = "paladin".to_string();
                             self.write_stat_name("Rizato the Paladin");
                             self.write_inv_add("Shield Of Reflection","sell", "armor/shield/shield_of_reflection", 0,0);
                             self.write_inv_add("Ring of Protection","sell", "magic/ring_emerald", 0,0);
@@ -466,7 +478,8 @@ impl Connection{
                             self.write_ground_add("E - Holy Wrath", "cast", "spells/holy_wrath.1", 0, 0);
                             self.write_ground_add("W - Flame Sword", "cast", "weapons/artifact/flaming_sword.1", 0, 0);
                             self.write_ground_add("Q - Magic Shield","cast", "armor/shield/magical_shield", 0,0);
-                        } else if self.name.starts_with("mage") {
+                        } else if self.name.starts_with("Cama") {
+                            self.skin = "mage".to_string();
                             self.write_stat_name("Cama the Arch Mage");
                             self.write_inv_add("Shirt of Fire","sell", "armor/armor/cloth_fire", 0,0);
                             self.write_inv_add("Ring of Fire","sell", "magic/ring_ruby", 0,0);
@@ -477,7 +490,8 @@ impl Connection{
                             self.write_ground_add("E - Prismatic Shield", "cast", "spells/fireice.1", 0, 0);
                             self.write_ground_add("W - Curse", "cast", "spells/curse.1", 0, 0);
                             self.write_ground_add("Q - Fear","cast", "spells/fear.1", 0,0);
-                        } else if self.name.starts_with("panther_male") {
+                        } else if self.name.starts_with("Romin") {
+                            self.skin = "panther_male".to_string();
                             self.write_stat_name("Romin the Warrior");
                             self.write_inv_add("Claws","sell", "weapons/claws/knop/claws_hunter", 0,0);
                             self.write_inv_add("Black Dragon Mail","sell", "armor/armor/black_dragon_mail", 0,0);
@@ -487,7 +501,8 @@ impl Connection{
                             self.write_ground_add("E - Swipe & Poison", "cast", "spells/poison/poison.1", 0, 0);
                             self.write_ground_add("W - Reveal", "cast", "spells/eyeball", 0, 0);
                             self.write_ground_add("Q - Fog","cast", "spells/fog/fog", 0,0);
-                        } else if self.name.starts_with("female_rogue") {
+                        } else if self.name.starts_with("Sarabi") {
+                            self.skin = "female_rogue".to_string();
                             self.write_stat_name("Sarabi the Reborn Ninja");
                             self.write_inv_add("Claws","sell", "weapons/claws/knop/claws_hunter", 0,0);
                             self.write_inv_add("Black Dragon Mail","sell", "armor/armor/black_dragon_mail", 0,0);
@@ -495,10 +510,9 @@ impl Connection{
                             //Writing pally spells
                         } else {
                             let name = self.name.clone();
+                            self.skin = self.name.clone();
                             self.write_stat_name(&format!("{} the Wonderful Player", name));
                         }
-                        self.skin = self.name.clone();
-
                         
                         self.write_stat_gold(123456);
                         self.write_stat_level(123, 8765534);
@@ -510,7 +524,7 @@ impl Connection{
                         println!("Login parse");
                         match self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
                             Some(game_loop) => {
-                                game_loop.borrow_mut().join(self.token.clone(), self.name.clone(),
+                                game_loop.borrow_mut().join(self.token.clone(), self.skin.clone(),
                                 None);
                                 println!("Looped");
                             },
@@ -539,11 +553,13 @@ impl Connection{
         //If success...
         //get loop from server
     }
-    
+    ///Handles MIO boilerplate
     fn reregister_writable(&mut self, event_loop: &mut mio::EventLoop<Server>){
         self.event_set.insert(mio::EventSet::writable());
         let _ = event_loop.reregister(&self.socket, self.token, self.event_set, mio::PollOpt::oneshot());
     }
+    
+    ///Handles MIO boilerplate
     fn reregister_readable(&mut self, event_loop: &mut mio::EventLoop<Server>){
         self.event_set.insert(mio::EventSet::readable());
         let _ = event_loop.reregister(&self.socket, self.token, self.event_set, mio::PollOpt::oneshot());
