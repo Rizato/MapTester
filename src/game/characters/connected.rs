@@ -208,7 +208,8 @@ impl Controllable for RoadWall{
         if self.index == index {
             match self.get_type() {
                 ControllableType::Wall => {
-                    true
+                    !self.tile.contains("door") && !self.tile.contains("Door")
+                    
                 }, 
                 _ => {
                     false
