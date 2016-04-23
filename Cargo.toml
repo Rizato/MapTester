@@ -1,4 +1,19 @@
 [package]
+
 name = "moba"
-version = "0.1.0"
-authors = ["Rizato <rizatodev@gmail.com>"]
+version = "0.0.1"
+authors = [ "Robert Lathrop <rizatodev@gmail.com>" ]
+
+[dependencies]
+mio = "0.4"
+flate2 = "0.2"
+byteorder = "0.4.2"
+bytes = "0.3.0"
+time = "0.1"
+slab   = "0.1.0"
+xml-rs = "0.3"
+glob = "0.2.11"
+
+[[bin]]
+
+name = "moba"
