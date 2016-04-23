@@ -1,6 +1,6 @@
 # Map Tester
 
-This project started as an attempt to build a moba from the Wyvern client. 
+This project started as an attempt to build a moba for the Wyvern client. 
 Shortly after I started the original game creator announced the return of the real game. 
 As a result, this project transitioned to a map tester, so that I could spend some time and get good at 
 map development. 
