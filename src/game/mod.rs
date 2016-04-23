@@ -29,11 +29,11 @@ use std::sync::Arc;
 use std::cell::RefCell;
 use std::fs::File;
 use std::io::BufReader;
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::Sender;
 use std::sync::Mutex;
 
 use game::gameloop::GameLoop;
-use conn::server::{Server, Msg};
+use conn::server::Msg;
 
 
 ///This just has a hashmap of gameloops, and maps of game loops, and also holds all of the tile

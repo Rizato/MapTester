@@ -23,16 +23,12 @@ use game::characters::Direction;
 use game::characters::player::Player;
 use game::characters::item::Item;
 use game::characters::connected::RoadWall;
-use game::characters::tower::Tower;
-use game::characters::projectile::Projectile;
 use game::characters::teleporter::Teleporter;
 use game::Game;
 
-use std::sync::RwLock;
 use std::sync::Arc;
 use std::fs::File;
 use std::io::BufReader;
-use std::cell::RefCell;
 use std::collections::HashMap;
 
 use xml::reader::{EventReader, XmlEvent};
@@ -64,7 +60,7 @@ impl GameMap {
             return Err("Map Not Found".to_string());
         }
         match GameMap::parse_tiles(mapname) {
-            Ok(mut map) => {
+            Ok(map) => {
                 //Still throwing the tile in because right now it is setup for that. 
                 //let t_index = 405;
                 //map.tiles[t_index as usize].user = Some(MapUser::new(None,Commandable::T(Tower::new())));
@@ -198,8 +194,8 @@ impl GameMap {
                                     }
                                     if is_terrain {
                                         let size = width as u32 * height as u32;
-                                        for x in 0..size {
-                                            let mut tile = MapTile::new(terrain.clone());
+                                        for _ in 0..size {
+                                            let tile = MapTile::new(terrain.clone());
                                             tiles.push(tile);
                                         }
                                     } else if is_oob {
@@ -372,26 +368,6 @@ impl GameMap {
         }
     }
 
-    ///This just does the given damage to the users's health 
-    fn hurt_user(&mut self, token: mio::Token, damage: i32) {
-        match self.find_player_with_token(token) {
-            Some(index) => {
-                match Arc::get_mut(&mut self.objects) {
-                    Some(objects) => {
-                        match objects.get_mut(index) {
-                            Some(ref mut p) => {
-                                p.hurt(damage);
-                            },
-                            None => {},
-                        }
-                    },
-                    None => {},
-                }
-            },
-            None =>{},
-        }
-    }
-    
     /// Adds the command from the client to the user object
     pub fn push_command(&mut self, token: mio::Token, command: String) {
         println!("push command");
@@ -451,7 +427,7 @@ impl GameMap {
     
     /// This goes through all connections, tries to read off the queue, and then executes each
     ///command, possibly returning a tailored response 
-    pub fn execute(&mut self, conns: &[mio::Token]) -> Vec<(mio::Token, u8, String)> {
+    pub fn execute(&mut self) -> Vec<(mio::Token, u8, String)> {
         let mut retval = vec![];
         //Looping through all tiles
         let width = self.width;
@@ -498,7 +474,6 @@ impl GameMap {
         let ref objects = self.objects;
         let len = objects.len();
         for i in 0..len {
-            let ref token = objects[i].get_token();
             let ref index = objects[i].get_location();
             match objects[i].get_token() {
                 Some(token) => {
@@ -540,14 +515,13 @@ impl GameMap {
     pub fn send_portion(&self,token: mio::Token) -> Option<MapScreen> {
         //println!("Send Portion");
         //This sends the squares around the user, which will always be centered in the screen.
-        let mut x = 0;
-        let mut y = 0;
         match self.find_player_with_token(token.clone()) {
             Some(index) => {
                 match self.objects.get(index) {
                     Some(ref p) => {
-                        x = p.get_location() % self.width as u32;
-                        y = p.get_location() / self.width as u32;
+                        let x = p.get_location() % self.width as u32;
+                        let y = p.get_location() / self.width as u32;
+                        Some(MapScreen::new(self, x, y))
                     },
                     None => {
                         return None;
@@ -558,14 +532,13 @@ impl GameMap {
                 return None;
             },
         }
-        Some(MapScreen::new(self, x, y))
     }
 
     /// Adds a player to the map. Puts it at the starting location.
     pub fn add_player(&mut self, token: mio::Token, name:String, index: Option<(u8, u8)>) {
         println!("Add Player");
-        let mut startx = 0;
-        let mut starty = 0;
+        let startx;
+        let starty;
         match index {
             Some((x,y)) => {
                 startx = x;
@@ -585,9 +558,8 @@ impl GameMap {
     ///full, it will take forever.
     fn add_player_at(&mut self, player: &mut Player, x: u8, y: u8, direction: Direction) -> bool {
         println!("adding at {} {}", x, y);
-        let mut blocked = false;
         let index = y as u32 * self.width as u32 + x as u32;
-        if x >= 0 && x < self.width && y >=0 && y < self.height {
+        if x < self.width && y < self.height {
             let mut is_open = true;
             {
                 match Arc::get_mut(&mut self.objects) {
@@ -725,7 +697,7 @@ impl ScreenTerrain {
     }
 
     pub fn get_priority(&self) -> u32 {
-        let mut priority = 0;
+        let priority;
         if self.tile.contains("grass") {
             priority = (2 as u32) << 17; 
         } else if self.tile.contains("shallow") {
@@ -791,7 +763,7 @@ impl MapScreen {
             let object_x = index % map.width as u32;
             let object_y = index / map.width as u32;
             if object_x as isize >= startx && object_x < map.width as u32 && object_y as isize >= starty
-                && object_y < map.height as u32  && object.is_visible(index, map) {
+                && object_y < map.height as u32  && object.is_visible(map) {
                     //Extra -1 is to account for the extra tile off screen.
                 obj.push(ScreenObject::new(object.get_tile(), (object_x as isize - startx -1) as u8 , (object_y as isize - starty -1) as u8));
             }

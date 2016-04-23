@@ -26,7 +26,6 @@ limitations under the License.*/
 extern crate mio;
 
 use std::sync::mpsc::Sender;
-use std::sync::mpsc::channel;
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
@@ -35,7 +34,6 @@ use std::sync::Mutex;
 use std::sync::Arc;
 
 use game::gamemap::GameMap;
-use game::characters::player::Player;
 use conn::server::Msg;
 
 /// This struct holds the map, and a list of tokens that are connected to this game loop. 
@@ -63,7 +61,7 @@ impl GameLoop {
                     println!("{}", s);
                     None
                 }, 
-                Ok(map) => {
+                Ok(_) => {
                     let mut gloop = GameLoop {
                         game_map: mapname.to_string(),
                         connections: Arc::new(RwLock::new(vec![])),
@@ -156,26 +154,26 @@ impl GameLoop {
                        //TODO get these responses in there somehow
                        {
                            let mutex = connections.read().unwrap();
-                           let responses = map.execute(&mutex);
+                           let responses = map.execute();
                            //Cannot seem to decontruct tuples in a loop. Doing the index version instead of
                            //iterating
                            //println!("Reading Responses");
                            for i in 0..responses.len() {
                                let (token, style, response) = responses[i].clone();
-                               to_mio.send(Msg::TextOutput(token, style, response));
+                               let _ = to_mio.send(Msg::TextOutput(token, style, response));
                            }
                            //send map & health updates
                            //println!("Sending map");
                            for conn in mutex.iter() {
                                let hp = map.get_hp(conn.clone());
                                if hp.is_some() {
-                                   to_mio.send(Msg::Hp(conn.clone(), hp.unwrap()));
+                                   let _ = to_mio.send(Msg::Hp(conn.clone(), hp.unwrap()));
                                }
                                let screen = map.send_portion(conn.clone());
                                //Need to see response from sender
                                match screen {
                                    Some(s) => {
-                                       to_mio.send(Msg::Screen(conn.clone(), s));
+                                       let _ =to_mio.send(Msg::Screen(conn.clone(), s));
                                    },
                                    None => {},
                                }
@@ -193,7 +191,7 @@ impl GameLoop {
                                }
                            }
                            println!("Sending join");
-                           to_mio.send(Msg::Join(token, join, index));
+                           let _ = to_mio.send(Msg::Join(token, join, index));
                        }
                    }
                }, 

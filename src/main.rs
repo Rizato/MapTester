@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.*/
 
+
 pub mod game;
 pub mod conn;
 
@@ -25,10 +26,7 @@ use conn::server::Server;
 
 use mio::tcp::*;
 use std::net::SocketAddr;
-use std::sync::Arc;
 
-use std::cell::RefCell;
-use std::sync::RwLock;
 
 /// This is the source for a MOBA server that is compatible with a preexisting game client. 
 

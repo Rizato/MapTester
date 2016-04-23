@@ -69,7 +69,7 @@ impl Player {
         let mut min = 9999;
         let mut index_min = 0;
         for node in open.iter() {
-            let mut val = estimates.entry(*node).or_insert(255); 
+            let val = estimates.entry(*node).or_insert(255); 
             if  *val < min {
                 min = val.clone();
                 index_min = node.clone();
@@ -95,13 +95,7 @@ impl Player {
                 break;
             }
             current = temp.clone();
-            let x = temp % 30;
-            let y = temp /30;
-            //println!("move {} {}", x, y);
         }
-        let x = current % 30;
-        let y = current /30;
-        //println!("actual {} {}", x, y);
         current
     }
     ///Computes the shortest path according to the A* algorithm. Gives the next step in the found path 
@@ -263,25 +257,6 @@ fn hueristic(width: u8, start: u32, end: u32) -> u32{
         }
         
     }
-    
-    fn get_tile(&self) -> String {
-        let direction = match self.direction {
-                                    Direction::South => {"S"},
-                                    Direction::North => {"N"},
-                                    Direction::East => {"E"},
-                                    Direction::West => {"W"},
-                                    _ => {"S"},
-                                };
-        format!("{}{}",self.tile, direction)
-    }
-
-    fn does_move(&self) -> bool {
-        true
-    }
-
-    fn set_direction(&mut self, dir: Direction) {
-        self.direction = dir;
-    }
 }
 
 ///Implements the A* pathfinding algorithm for the player
@@ -382,7 +357,7 @@ impl Controllable for Player {
         self.index == index
     }
 
-    fn is_visible(&self, center: u32, map: &GameMap) -> bool {
+    fn is_visible(&self, _: &GameMap) -> bool {
         true
     }
 
@@ -401,7 +376,7 @@ impl Controllable for Player {
         self.movement = Some(end);
     }
 
-    fn modify_connected_tiles(&mut self, width: u8, height: u8, objects : &Vec<bool>) {}
+    fn modify_connected_tiles(&mut self, _: u8, _: u8, _: &Vec<bool>) {}
 
     fn get_type(&self) -> ControllableType {
         ControllableType::Player

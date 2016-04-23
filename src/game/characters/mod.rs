@@ -20,8 +20,6 @@ pub mod player;
 pub mod connected;
 pub mod item;
 pub mod teleporter;
-pub mod tower;
-pub mod projectile;
 
 use game::gamemap::GameMap;
 
@@ -64,7 +62,7 @@ pub trait Controllable {
     fn get_hp(&self) -> Option<i32>;
     fn set_location(&mut self, index: u32);
     fn does_block_index(&self, index: u32) -> bool;
-    fn is_visible(&self, center: u32, map: &GameMap) -> bool;
+    fn is_visible(&self, map: &GameMap) -> bool;
     fn hurt(&mut self, damage: i32);
     fn set_movement(&mut self, end: u32); 
     fn push_command(&mut self, command: String);

@@ -19,7 +19,6 @@ extern crate slab;
 
 use game::gamemap::MapScreen;
 use game::Game;
-use game::characters::player::Player;
 use conn::api::Api;
 
 
@@ -35,8 +34,6 @@ use flate2::write::ZlibEncoder;
 
 use std::io::prelude::*;
 use std::cell::RefCell;
-use std::fs::File;
-use std::io::BufReader;
 use std::sync::Arc;
 use std::sync::mpsc::{Sender, Receiver, channel};
 use std;
@@ -56,7 +53,6 @@ pub const TIMEOUT: mio::Token = mio::Token(1);
 
 /// enum for the current state of the connection. Not Logged in, Logged in, and Closed.
 enum State {
-    Closed,
     NotLoggedIn,
     LoggedIn,
 }
@@ -81,7 +77,6 @@ pub struct Server {
     connections: Slab<Connection>,
     games: Arc<RefCell<Game>>,
     recv: Receiver<Msg>,
-    send: Sender<Msg>,
 }
 
 impl Server {
@@ -93,7 +88,6 @@ impl Server {
             server: tcp,
             connections: slab,
             games: Arc::new(RefCell::new(Game::new(s.clone()))),
-            send: s,
             recv: r,
         }
     }
@@ -103,7 +97,7 @@ impl mio::Handler for Server {
     type Timeout = mio::Token;
     type Message = ();
 
-    fn timeout(&mut self, event_loop: &mut mio::EventLoop<Server>, timeout: mio::Token) {
+    fn timeout(&mut self, event_loop: &mut mio::EventLoop<Server>, _: mio::Token) {
         loop {
             match self.recv.try_recv() {
                 Ok(msg) => {
@@ -206,9 +200,6 @@ impl mio::Handler for Server {
                 } else {
                     self.connections[token].ready(event_loop);
                     //if the connection has closed, remove it
-                    if self.connections[token].is_closed() {
-                        let _ = self.connections.remove(token);
-                    }
                 }
             },
         }
@@ -254,18 +245,7 @@ impl Connection{
         }
     }
 
-    fn is_closed(&self) -> bool {
-        match self.state {
-            State::Closed => {
-                true
-            },
-            _ => {
-                false
-            },
-        }
-    }
-
-    fn quit(&mut self, event_loop: &mut mio::EventLoop<Server>) {
+    fn quit(&mut self, _: &mut mio::EventLoop<Server>) {
         println!("Quit parse");
         match self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
             Some(game_loop) => {
@@ -325,9 +305,6 @@ impl Connection{
                     self.readable(event_loop);
                 }
             },
-            _ => {
-                unimplemented!();
-            }
         }
     }
     
@@ -358,7 +335,7 @@ impl Connection{
                                     _ => {},
                                 }
                             } else if command.starts_with("skin ") && command.len() > 5 {
-                                let (ref a, ref skin) = command.split_at(5);
+                                let (_, ref skin) = command.split_at(5);
                                 self.skin = skin.to_string();
                                 match
                                     self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
@@ -369,15 +346,15 @@ impl Connection{
                                     None => {},
                                 }
                             } else if command.starts_with("join ") && command.len() > 5 {
-                                let (ref a, ref map) = command.split_at(5);
+                                let (_, ref map) = command.split_at(5);
                                 self.join(map, None);
                             } else if command.starts_with("shout ") && command.len() > 6 {
-                                let (ref a, ref msg) = command.split_at(6);
-                                let mut m = format!("{} shouts: {} ", self.name, msg).to_string();
+                                let (_, ref msg) = command.split_at(6);
+                                let m = format!("{} shouts: {} ", self.name, msg).to_string();
                                 //Doing this the trivially easy way, just doing a notification for
                                 //that gets pushed to everyone
                                 let send = self.games.borrow_mut().send.clone();
-                                send.send(Msg::Shout(m));
+                                let _ = send.send(Msg::Shout(m));
                             } else {
                                 //println!("Readable parse");
                                 match self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map",self.map)) {
@@ -408,7 +385,7 @@ impl Connection{
     fn writable(&mut self, event_loop: &mut mio::EventLoop<Server>) {
         let mut buf = self.to_client_queue.pop().unwrap();
         match self.socket.try_write_buf(&mut buf) {
-            Ok(Some(n)) => {
+            Ok(Some(_)) => {
                 if buf.has_remaining() {
                     self.to_client_queue.push(buf);
                     self.event_set.insert(mio::EventSet::writable());
@@ -449,9 +426,9 @@ impl Connection{
                     //Modify this to use take.
                     let first_value: i32 = buf[..].iter().take(4).fold(0i32, |sum, x| sum  << 8 | *x as i32);
                     if first_value == 1 {
-                        let width: i16 = buf[4..].iter().take(2).fold(0i16, |sum, x| sum << 8 | *x as i16);
+                        let _ : i16 = buf[4..].iter().take(2).fold(0i16, |sum, x| sum << 8 | *x as i16);
                         //println!("width {}", width);
-                        let height: i16 = buf[6..].iter().take(2).fold(0i16, |sum, x| sum << 8 | *x as
+                        let _ : i16 = buf[6..].iter().take(2).fold(0i16, |sum, x| sum << 8 | *x as
                                                                   i16);
                         //println!("height {}", height);
                         let name_len: usize= buf[8..].iter().take(2).fold(0usize, |sum, x| sum << 8 | *x as usize);
@@ -459,12 +436,12 @@ impl Connection{
                         self.name = name.to_string();
                         //println!("name {}", name);
                         let pw_len: usize= buf[10+name_len..].iter().take(2).fold(0usize, |sum, x| sum << 8 | *x as usize);
-                        let pw: &str = std::str::from_utf8(&buf[12+name_len..12+name_len+pw_len]).unwrap();
+                        let _ = std::str::from_utf8(&buf[12+name_len..12+name_len+pw_len]).unwrap();
                         //println!("pw {}", pw);
-                        let version_len: usize= buf[12+name_len+pw_len..].iter().take(2).fold(0usize, |sum, x| sum << 8 | *x as usize);
+                        let _ = buf[12+name_len+pw_len..].iter().take(2).fold(0usize, |sum, x| sum << 8 | *x as usize);
                         //println!("Remanining {} Version {}", 16+name_len+pw_len, version_len);
                         //Hoping that it can't double send. Cause that'll produce weird results
-                        let version: &str =
+                        let _ : &str =
                             std::str::from_utf8(&buf[14+name_len+pw_len..]).unwrap();
                         //println!("version {}", version);
                         //println!("game_loop");

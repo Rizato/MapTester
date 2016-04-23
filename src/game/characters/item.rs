@@ -18,11 +18,8 @@ extern crate mio;
 
 use game::characters::Controllable;
 use game::characters::ControllableType;
-use game::characters::Direction;
 use game::gamemap::GameMap;
 
-use std::collections::HashMap;
-use std::collections::HashSet;
 
 ///Defines the Item struct.
 #[derive(Clone)]
@@ -46,7 +43,7 @@ impl Item {
 
 impl Controllable for Item {
     ///Called every game loop to update it
-    fn update(&mut self, width: u8, height: u8, blocked: &Vec<bool>) -> Option<Vec<(mio::Token, u8, String)>> {
+    fn update(&mut self, _: u8, _: u8, _: &Vec<bool>) -> Option<Vec<(mio::Token, u8, String)>> {
         None
     }
     ///Used when drawing the screen
@@ -86,23 +83,23 @@ impl Controllable for Item {
 
     /// Whether or not to show this object. This obviously fails for very large objects that are
     ///off screen. Maybe I will handle that. 
-    fn is_visible(&self, center: u32, map: &GameMap) -> bool {
+    fn is_visible(&self, _: &GameMap) -> bool {
         true
     }
 
     ///This function subtracts from the hp of the player
-    fn hurt(&mut self, damage: i32) {
+    fn hurt(&mut self, _: i32) {
     }
 
     ///Pushes a command to the command queue for the mapuser
-    fn push_command(&mut self, command: String) {
+    fn push_command(&mut self, _: String) {
     }
     
     ///Puts an absolute X, Y as the movement goal for this mapuser
-    fn set_movement(&mut self, end: u32) {
+    fn set_movement(&mut self, _: u32) {
     }
 
-    fn modify_connected_tiles(&mut self, width: u8, height: u8,  objects : &Vec<bool>) {}
+    fn modify_connected_tiles(&mut self, _: u8, _: u8,  _: &Vec<bool>) {}
 
     fn get_type(&self) -> ControllableType {
         ControllableType::Item
