@@ -19,6 +19,7 @@ extern crate mio;
 pub mod player;
 pub mod connected;
 pub mod item;
+pub mod teleporter;
 pub mod tower;
 pub mod projectile;
 
@@ -45,6 +46,7 @@ pub enum ControllableType{
     Wall,
     Player,
     Item,
+    Teleporter,
 }
 
 ///This trait is used to define a set of functions for moveable objects. Helps with pathfinding.

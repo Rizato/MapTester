@@ -25,6 +25,7 @@ use game::characters::item::Item;
 use game::characters::connected::RoadWall;
 use game::characters::tower::Tower;
 use game::characters::projectile::Projectile;
+use game::characters::teleporter::Teleporter;
 use game::Game;
 
 use std::sync::RwLock;
@@ -32,6 +33,7 @@ use std::sync::Arc;
 use std::fs::File;
 use std::io::BufReader;
 use std::cell::RefCell;
+use std::collections::HashMap;
 
 use xml::reader::{EventReader, XmlEvent};
 
@@ -49,6 +51,7 @@ pub struct GameMap {
     pub height: u8,
     pub tiles: Arc<Vec<MapTile>>,
     pub objects: Arc<Vec<Box<Controllable>>>,
+    pub teleporter: HashMap<u32,Teleporter>,
     start_x: u8,
     start_y: u8, 
 }
@@ -86,6 +89,8 @@ impl GameMap {
         }
     }
 
+    /// This is without a doubt the most hideos part of the code, and there are a lot of hideous
+    ///parts.
     fn parse_tiles(path: &str) -> Result<GameMap, String>{
         println!("Parsing! {}", path);
         match File::open(path) {
@@ -96,8 +101,17 @@ impl GameMap {
                 let buf = BufReader::new(file);
                 let parser = EventReader::new(buf);
                 let mut header = false;
+                let mut teleporter = false;
+                let mut teleporter_index = 0;
+                let mut teleporter_use_default = false;
+                let mut teleporter_x = 0;
+                let mut teleporter_y = 0;
+                let mut teleporter_height = 1;
+                let mut teleporter_width = 1;
+                let mut teleporter_map = String::new();
                 let mut tiles: Vec<MapTile> = vec![];
                 let mut objects: Vec<Box<Controllable>> = vec![];
+                let mut teleporters: HashMap<u32, Teleporter>= HashMap::new(); 
                 let mut width: u8 = 0;
                 let mut height: u8 = 0;
                 let mut start_x: u8 = 0;
@@ -139,14 +153,39 @@ impl GameMap {
                                 } else {
                                     return Err("Invalid dimensions".to_string());
                                 }
+                            } else if name.local_name == "bean" {
+                            } else if name.local_name == "boolean" {
+                                if teleporter {
+                                    for attr in attributes {
+                                        if attr.name.local_name == "name" 
+                                            && attr.value == "ask-map" {
+                                            teleporter_use_default = true;
+                                        }
+                                    }
+                                }
+                            } else if name.local_name == "string" {
+                                let mut is_map = false;
+                                let mut name = String::new();
+                                if teleporter {
+                                    for attr in attributes {
+                                        if attr.name.local_name == "name" 
+                                            && attr.value =="map" {
+                                                is_map = true;
+                                        } else if attr.name.local_name == "value" {
+                                            name = attr.value.to_string();
+                                        }
+                                    }
+                                    if is_map {
+                                        teleporter_map = name;
+                                    }
+                                }
+                                println!("{}", teleporter_map);
                             } else if name.local_name == "arch" {
-                                println!("Arch");
                                 if header {
                                     let mut terrain = String::new();
                                     let mut is_terrain = false;
                                     let mut is_oob = false;
                                     for attr in attributes {
-                                        println!("head-arch {}", attr.name.local_name);
                                         if attr.name.local_name == "name" &&
                                             attr.value == "terrain" {
                                                 is_terrain = true;
@@ -202,6 +241,14 @@ impl GameMap {
                                                 tiles[index].blocked = false;
                                             }
                                         }
+                                    } else if tile == "special/teleporter".to_string() {
+                                        println!("Started teleporter");
+                                        let index: u32 = rect_y as u32 * width as u32 + rect_x as u32;
+                                        teleporter = true;
+                                        teleporter_index = index.clone();
+                                        teleporter_height = rect_h.clone();
+                                        teleporter_width = rect_w.clone();
+                                        println!("Finished teleporter");
                                     } else {
                                         for x in rect_x..(rect_x+rect_w) {
                                             for y in rect_y..(rect_y+rect_h) {
@@ -231,7 +278,11 @@ impl GameMap {
                                         val = attr.value.parse::<u8>().unwrap();
                                     }
                                 }
-                                if name.contains("startX") {
+                                if teleporter && name == "x" {
+                                    teleporter_x = val;
+                                } else if teleporter && name == "y"{
+                                    teleporter_y = val;
+                                } else if name.contains("startX") {
                                     start_x = val;
                                 } else if name.contains("startY") {
                                     start_y = val;
@@ -246,6 +297,33 @@ impl GameMap {
                                         tiles[index].blocked = true;
                                     }
                                 }
+                            } else if name.local_name == "arch" && teleporter {
+                                println!("teleporter: {}", teleporter_index);
+                                let t_x = teleporter_index % width as u32;
+                                let t_y = teleporter_index / width as u32;
+                                for x in 0..teleporter_width {
+                                    for y in 0..teleporter_height {
+                                        println!("map {} index {} default {}", teleporter_map,
+                                                 teleporter_index, teleporter_use_default);
+                                        let index = (t_y as u32 + y as u32) as u32 * width as u32 + (t_x as u32 +x as u32) as u32;
+                                        teleporters.insert(teleporter_index,
+                                                           Teleporter::new(teleporter_map.clone(),
+                                                                              index,
+                                                                              teleporter_use_default,
+                                                                              teleporter_x,
+                                                                              teleporter_y));
+                                    }
+                                }
+
+                                //Reset teleporter values
+                                teleporter = false;
+                                teleporter_index = 0;
+                                teleporter_use_default = false;
+                                teleporter_x = 1;
+                                teleporter_y = 1;
+                                teleporter_height = 1;
+                                teleporter_width = 1;
+                                teleporter_map ="".to_string();
                             }
                         },
                         _ => {
@@ -286,6 +364,7 @@ impl GameMap {
                     height: height,
                     tiles: Arc::new(tiles),
                     objects: Arc::new(objects),
+                    teleporter: teleporters,
                     start_x : start_x,
                     start_y : start_y,
                 })
@@ -413,6 +492,29 @@ impl GameMap {
         }
         retval
     }
+
+    pub fn do_teleports(&self) -> Vec<(mio::Token, String, Option<(u8,u8)>)> {
+        let mut retval = vec![];
+        let ref objects = self.objects;
+        let len = objects.len();
+        for i in 0..len {
+            let ref token = objects[i].get_token();
+            let ref index = objects[i].get_location();
+            match objects[i].get_token() {
+                Some(token) => {
+                    match self.teleporter.get(index) {
+                        Some(tele) => {
+                            retval.push(tele.teleport(token.clone()))
+                        },
+                        None => {},
+                    }
+                },
+                None => {},
+            }
+        }
+        retval
+    }
+
     
     
     /// This pulls the HP from health. 
@@ -460,11 +562,21 @@ impl GameMap {
     }
 
     /// Adds a player to the map. Puts it at the starting location.
-    pub fn add_player(&mut self, token: mio::Token, name:String) {
+    pub fn add_player(&mut self, token: mio::Token, name:String, index: Option<(u8, u8)>) {
         println!("Add Player");
-        let sx = self.start_x.clone();
-        let sy = self.start_y.clone();
-        self.add_player_at(&mut Player::new(name, token), sx, sy, Direction::All);
+        let mut startx = 0;
+        let mut starty = 0;
+        match index {
+            Some((x,y)) => {
+                startx = x;
+                starty = y;
+            },
+            None => {
+                startx = self.start_x;
+                starty = self.start_y;
+            },
+        }
+        self.add_player_at(&mut Player::new(name, token), startx, starty, Direction::All);
     }
 
     ///Recursively searches for an open location. Sadly this is a horrible algorithm, and will build characters
@@ -536,22 +648,29 @@ impl GameMap {
         match Arc::get_mut(&mut self.objects) {
             Some(objects) => {
                 let len = objects.len();
-                let mut remove_index = 0;
+                let mut remove_index = None;
                 for i in 0..len {
                     let ref object = objects[i];
                     match object.get_token() {
                         Some(ref tok) => {
                             if tok.as_usize() == token.as_usize() {
-                                remove_index = i;
+                                remove_index = Some(i);
+
                             }
                         },
                         None =>{},
                     }
                 }
-                objects.remove(remove_index);
+                match remove_index {
+                    Some(index) => {
+                        objects.remove(index);
+                    },
+                    None => {},
+                }
             },
             None => {},
         }
+        println!("FInished remove");
     }
 }
 
@@ -672,7 +791,7 @@ impl MapScreen {
             let object_x = index % map.width as u32;
             let object_y = index / map.width as u32;
             if object_x as isize >= startx && object_x < map.width as u32 && object_y as isize >= starty
-                && object_y < map.height as u32 {
+                && object_y < map.height as u32  && object.is_visible(index, map) {
                     //Extra -1 is to account for the extra tile off screen.
                 obj.push(ScreenObject::new(object.get_tile(), (object_x as isize - startx -1) as u8 , (object_y as isize - starty -1) as u8));
             }

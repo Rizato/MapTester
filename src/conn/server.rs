@@ -70,6 +70,7 @@ pub enum Msg {
     Shout(String),
     Screen(mio::Token, MapScreen),
     Hp(mio::Token, i32),
+    Join(mio::Token, String, Option<(u8, u8)>),
 }
 
 /// This server maintain holds the tcp server, as well as a collection of all the current client
@@ -143,6 +144,16 @@ impl mio::Handler for Server {
                             for token in tokens {
                                self.connections[token].write_text_out(4,&msg); 
                                self.connections[token].reregister_writable(event_loop);
+                            }
+                        },
+                        Msg::Join(token, map, Some((x,y))) => {
+                            if self.connections.contains(token) {
+                                self.connections[token].join(&map, Some((x,y)));
+                            }
+                        },
+                        Msg::Join(token, map, None) => {
+                            if self.connections.contains(token) {
+                                self.connections[token].join(&map, None);
                             }
                         },
                         _ => {
@@ -263,7 +274,38 @@ impl Connection{
             None => {},
         }
     }
-    
+
+    fn join(&mut self, map: &str, index: Option<(u8,u8)>) {
+        let ref mut games = self.games.borrow_mut();
+        match games.get_or_create_game_loop(&format!("maps/{}.map", map)) {
+            Some(game_loop) => {
+                match games.get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
+                    Some(old_loop) => {
+                        old_loop.borrow_mut().remove(self.token.clone());
+                    },
+                    None => {
+                        println!("Failed to find {}", self.map);
+                    },
+                }
+                game_loop.borrow_mut().join(self.token.clone(),
+                self.skin.clone(),
+                index);
+                self.map = map.to_string().clone();
+            },
+            None =>{
+                println!("Failed to find {}", self.map);
+                match games.get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
+                    Some(old_loop) => {
+                        old_loop.borrow_mut().join(self.token.clone(),
+                        self.skin.clone(),
+                        None);
+                    },
+                    None =>{},
+                }
+            },
+        }
+    }
+
     fn ready(&mut self, event_loop: &mut mio::EventLoop<Server>){
         //If readable && not logged in, send it to login
         // elif readable && logged in send to command reader (which will send to game_loop or chat)
@@ -328,21 +370,7 @@ impl Connection{
                                 }
                             } else if command.starts_with("join ") && command.len() > 5 {
                                 let (ref a, ref map) = command.split_at(5);
-                                let ref mut games = self.games.borrow_mut();
-                                match games.get_or_create_game_loop(&format!("maps/{}.map", map)) {
-                                    Some(game_loop) => {
-                                        match games.get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
-                                            Some(old_loop) => {
-                                                old_loop.borrow_mut().remove(self.token.clone());
-                                            },
-                                            None => {},
-                                        }
-                                        game_loop.borrow_mut().join(self.token.clone(),
-                                        self.skin.clone());
-                                        self.map = map.to_string().clone();
-                                    },
-                                    None =>{},
-                                }
+                                self.join(map, None);
                             } else if command.starts_with("shout ") && command.len() > 6 {
                                 let (ref a, ref msg) = command.split_at(6);
                                 let mut m = format!("{} shouts: {} ", self.name, msg).to_string();
@@ -492,6 +520,7 @@ impl Connection{
                             let name = self.name.clone();
                             self.write_stat_name(&format!("{} the Wonderful Player", name));
                         }
+                        self.skin = self.name.clone();
 
                         
                         self.write_stat_gold(123456);
@@ -504,7 +533,8 @@ impl Connection{
                         println!("Login parse");
                         match self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
                             Some(game_loop) => {
-                                game_loop.borrow_mut().join(self.token.clone(), self.name.clone());
+                                game_loop.borrow_mut().join(self.token.clone(), self.name.clone(),
+                                None);
                                 println!("Looped");
                             },
                             None => {},

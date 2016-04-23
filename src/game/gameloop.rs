@@ -44,7 +44,7 @@ pub struct GameLoop {
     //Map with all items & tiles
     game_map: String,
     connections: Arc<RwLock<Vec<mio::Token>>>, 
-    add_connections: Arc<RwLock<Vec<(mio::Token, String)>>>, 
+    add_connections: Arc<RwLock<Vec<(mio::Token, String, Option<(u8,u8)>)>>>, 
     remove_connections: Arc<RwLock<Vec<mio::Token>>>, 
     command_queue: Arc<Mutex<Vec<Msg>>>, 
     to_game_send: Sender<Msg>,
@@ -53,23 +53,28 @@ pub struct GameLoop {
 impl GameLoop {
     ///creates a new game loop
     pub fn new(mapname : &str, send: Sender<Msg>) -> Option<GameLoop> {
-        let map = GameMap::new(&mapname);
-        match map {
-            Err(s) => {
-                println!("{}", s);
-                None
-            }, 
-            Ok(map) => {
-                let mut gloop = GameLoop {
-                    game_map: mapname.to_string(),
-                    connections: Arc::new(RwLock::new(vec![])),
-                    add_connections: Arc::new(RwLock::new(vec![])),
-                    remove_connections: Arc::new(RwLock::new(vec![])),
-                    command_queue: Arc::new(Mutex::new(vec![])),
-                    to_game_send: send,
-                };
-                gloop.start();
-                Some(gloop)
+        if mapname.contains("..") {
+            println!("Attempted relative path: {}", mapname);
+            None
+        } else {
+            let map = GameMap::new(&mapname);
+            match map {
+                Err(s) => {
+                    println!("{}", s);
+                    None
+                }, 
+                Ok(map) => {
+                    let mut gloop = GameLoop {
+                        game_map: mapname.to_string(),
+                        connections: Arc::new(RwLock::new(vec![])),
+                        add_connections: Arc::new(RwLock::new(vec![])),
+                        remove_connections: Arc::new(RwLock::new(vec![])),
+                        command_queue: Arc::new(Mutex::new(vec![])),
+                        to_game_send: send,
+                    };
+                    gloop.start();
+                    Some(gloop)
+                }
             }
         }
     }
@@ -101,26 +106,35 @@ impl GameLoop {
                            let mut a = add.write().unwrap();
                            let mut conn = connections.write().unwrap();
                            for i in 0..a.len() {
-                               let (t, name) = a[i].clone();
-                               map.add_player(t, name);
-                               a.remove(i);
-                               conn.push(t);
-                          }
+                               let mut exists = false;
+                               let (t, name, index) = a[i].clone();
+                               for c in 0..conn.len() {
+                                   if t.as_usize() == conn[c].as_usize() {
+                                       exists = true;
+                                       break;
+                                   }
+                               }
+                               if !exists {
+                                   map.add_player(t, name, index);
+                                   conn.push(t);
+                               }
+                           }
+                           a.clear();
                        }
                        {
                            let mut r = remove.write().unwrap();
                            let mut conn = connections.write().unwrap();
                            for i in 0..r.len() {
                                let t = r[i].clone();
-                               r.remove(i);
                                map.remove_player(t);
-                               for i in 0..conn.len() {
-                                   if conn[i] == t{
+                               for c in 0..conn.len() {
+                                   if conn[c] == t{
                                        conn.remove(i);
                                        break;
                                    }
                                }
-                          }
+                           }
+                           r.clear();
                        }
                        //This can cause DOS by keeping the commands from executing
                        //println!("Reading commands");
@@ -140,32 +154,47 @@ impl GameLoop {
                             }
                        }
                        //TODO get these responses in there somehow
-                       let mutex = connections.read().unwrap();
-                       let responses = map.execute(&mutex);
-                       //Cannot seem to decontruct tuples in a loop. Doing the index version instead of
-                       //iterating
-                       //println!("Reading Responses");
-                       for i in 0..responses.len() {
-                           let (token, style, response) = responses[i].clone();
-                           to_mio.send(Msg::TextOutput(token, style, response));
-                       }
-                       //send map & health updates
-                       //println!("Sending map");
-                       for conn in mutex.iter() {
-                           let hp = map.get_hp(conn.clone());
-                           if hp.is_some() {
-                               to_mio.send(Msg::Hp(conn.clone(), hp.unwrap()));
+                       {
+                           let mutex = connections.read().unwrap();
+                           let responses = map.execute(&mutex);
+                           //Cannot seem to decontruct tuples in a loop. Doing the index version instead of
+                           //iterating
+                           //println!("Reading Responses");
+                           for i in 0..responses.len() {
+                               let (token, style, response) = responses[i].clone();
+                               to_mio.send(Msg::TextOutput(token, style, response));
                            }
-                           let screen = map.send_portion(conn.clone());
-                           //Need to see response from sender
-                           match screen {
-                               Some(s) => {
-                                   to_mio.send(Msg::Screen(conn.clone(), s));
-                               },
-                               None => {},
+                           //send map & health updates
+                           //println!("Sending map");
+                           for conn in mutex.iter() {
+                               let hp = map.get_hp(conn.clone());
+                               if hp.is_some() {
+                                   to_mio.send(Msg::Hp(conn.clone(), hp.unwrap()));
+                               }
+                               let screen = map.send_portion(conn.clone());
+                               //Need to see response from sender
+                               match screen {
+                                   Some(s) => {
+                                       to_mio.send(Msg::Screen(conn.clone(), s));
+                                   },
+                                   None => {},
+                               }
                            }
                        }
-                       //println!("Finished Loop");
+                       let teleports = map.do_teleports();
+                       for i in 0..teleports.len() {
+                           let (token, join, index) = teleports[i].clone();
+                           map.remove_player(token);
+                           let mut conn = connections.write().unwrap();
+                           for i in 0..conn.len() {
+                               if conn[i] == token{
+                                   conn.remove(i);
+                                   break;
+                               }
+                           }
+                           println!("Sending join");
+                           to_mio.send(Msg::Join(token, join, index));
+                       }
                    }
                }, 
                    Err(_) => {},
@@ -174,9 +203,9 @@ impl GameLoop {
     }
     
     ///Lets a connection join the game loop
-    pub fn join(&mut self, token: mio::Token, name: String) {
+    pub fn join(&mut self, token: mio::Token, name: String, index: Option<(u8, u8)>) {
         let mut conn = self.add_connections.write().unwrap();
-        conn.push((token, name));
+        conn.push((token, name, index));
     }
 
     pub fn remove(&mut self, token : mio::Token) {
