@@ -11,7 +11,8 @@ Check the side bar for links to the game client & map editor (Go to the archived
 
 # Run the server
 
-I have a demo version set up at map.rizato.com. The only maps available there are "main" or "cave."
+~~I have a demo version set up at map.rizato.com. The only maps available there are "main" or "cave."~~
+My free trial on the google cloud platform ended, so the demo is no longer available.
 
 If you want to test your own maps you will have to set up your own instance. 
 It is pretty easy as long as you have a Mac or Linux box available (or you can use one of the many compute cloud engines.)
