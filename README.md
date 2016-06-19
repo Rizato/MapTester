@@ -80,7 +80,7 @@ That said, this map tester definitely does not handle all the features of either
 
 When using only stock images this is typically due to the path specified in XML not being an exact match for the image file. 
 
-e.g. <arch path="/some/path.gif"/> but image file is /some/cool/path.gif.
+e.g. `<arch path="/some/path.gif"/>` but image file is /some/cool/path.gif.
 
 **Resolution:** Two options. Edit the map file and put the actual image path. Edit Item or the ScreenTerrain structs and hard-code a string replace. To find the actual name of the file, right click the tile in the map editor & select all properties. The important fields are archetype, the path in XML, and image. 
 
@@ -142,7 +142,9 @@ This works with the original Wyvern client. It is compatible with clients runnin
 
 ## Adding features
 
-If you want to add some more features that the Wyvern client supports check out the [protocol documentation](http://web.archive.org/web/20101121021755/http://cabochon.com/wiz/clients) and [here](http://web.archive.org/web/20101121031823/http://cabochon.com/wiz/client_protocol)
+~~If you want to add some more features that the Wyvern client supports check out the [protocol documentation](http://web.archive.org/web/20101121021755/http://cabochon.com/wiz/clients) and [here](http://web.archive.org/web/20101121031823/http://cabochon.com/wiz/client_protocol)~~
+
+The new owner of the old website's domain dissallows ia_archiver, so the entire archive has been retroactively removed.
 
 Additionally, because the API from Wyvern is subject to copyright, we obtained permission from the copyright holder to publish that portion of the code.
 
