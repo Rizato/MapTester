@@ -303,7 +303,11 @@ impl Controllable for Player {
               } else if command.starts_with("skin "){
                   let parts: Vec<&str> = command.split(" ").collect();
                   if parts.len() > 1 {
-                      self.tile = format!("players/{}.", parts[1]);
+                      if parts[1].starts_with("/") {
+                          self.tile = format!("{}.", parts[1].to_string()[1..].to_string());
+                      } else {
+                          self.tile = format!("players/{}.", parts[1]);
+                      }
                       Some(vec![(self.token.clone(), 3,  "Skin Changed".to_string()); 1])
                   } else {
                       None
