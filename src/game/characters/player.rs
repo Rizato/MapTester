@@ -188,9 +188,9 @@ fn hueristic(width: u8, start: u32, end: u32) -> u32{
         let mut neighbors = vec![];
         for dx in 0..3 {
             for dy in 0..3 {
-                if dy == dx || (dx == 0 && dy == 2) || (dx == 2 && dy == 0)  {
-                    continue;
-                }
+                //if dy == dx || (dx == 0 && dy == 2) || (dx == 2 && dy == 0)  {
+                //    continue;
+                //}
                 let current_x = (x as i32) + (dx as i32) -1;
                 let current_y = (y as i32) + (dy as i32) -1;
                 if current_x >=0 && current_y >=0 {
@@ -267,6 +267,7 @@ impl Controllable for Player {
        let c = self.get_command();
        match c {
            Some(command) => {
+              println!("{}", command);
               if command.starts_with("end") {
                   let parts: Vec<&str> = command.split_whitespace().collect();
                   let end = parts[1].parse::<u32>().unwrap();
@@ -300,6 +301,50 @@ impl Controllable for Player {
                           Some(vec![(self.token.clone(), 5,  "No Path Found".to_string()); 1])
                       },
                   }
+              } else if command.starts_with("numpad-") {
+                  let parts: Vec<&str> = command.split("-").collect();
+                  if parts.len() > 1 {
+                      match parts[1].parse::<u32>() {
+                          Ok(numpad) => {
+                              let mut x: u32 = self.index % width as u32;
+                              let mut y: u32 = self.index / width as u32;
+                              match numpad {
+                                  1 => {
+                                      x -= 1;
+                                      y += 1;
+                                  },
+                                  2 => {
+                                      y += 1;
+                                  },
+                                  3 => {
+                                      x += 1;
+                                      y += 1;
+                                  },
+                                  4 => {
+                                      x -= 1;
+                                  },
+                                  6 => {
+                                      x += 1;
+                                  },
+                                  7 => {
+                                      x -= 1;
+                                      y -= 1;
+                                  },
+                                  8 => {
+                                      y -= 1;
+                                  },
+                                  9 => {
+                                      x += 1;
+                                      y -= 1;
+                                  },
+                                  _ => {},
+                              };
+                              self.movement = Some(y * width as u32 + x);
+                          },
+                          Err(_) => {},
+                      };
+                  }
+                  None
               } else if command.starts_with("skin "){
                   let parts: Vec<&str> = command.split(" ").collect();
                   if parts.len() > 1 {

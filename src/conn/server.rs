@@ -326,59 +326,64 @@ impl Connection{
                         let length = length_slice.iter().fold(0usize,| total, x | total  << 8 | *x as
                                                              usize);
                         if n >= 2+ length {
-                            let command = std::str::from_utf8(&read[2..2+length]).unwrap();
-                            //Because I took a shortcut and use the command "end <index>" as an internal command
-                            //I had to intercept the end_key early.
-                            if command.starts_with("end_key") {
-                                println!("End key hit");
-                            } else if command.starts_with("#tile") {
-                                //Sends any missing tile art to the client
-                                match command.split(" ").next().unwrap().parse() {
-                                    Ok(tile) => {
-                                        self.write_tile(tile);
-                                    },
-                                    _ => {},
-                                }
-                            } else if command.starts_with("#img") && command.len() > 5 {
-                                let (_, ref img) = command.split_at(5);
-                                println!("{}", img);
-                                self.write_image(img);
-                            } else if command.starts_with("skin ") && command.len() > 5 {
-                                //Changes the character skin. Passes on to game loop so the map can change
-                                //it on the player object as well.
-                                let (_, ref skin) = command.split_at(5);
-                                self.skin = skin.to_string();
-                                match
-                                    self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
-                                    Some(game_loop) => {
-                                        game_loop.borrow_mut().send_command(Msg::Command(self.token.clone(),
-                                        command.to_string()));
-                                    },
-                                    None => {},
-                                }
-                            } else if command.starts_with("join ") && command.len() > 5 {
-                                //Join a new map
-                                let (_, ref map) = command.split_at(5);
-                                self.join(map, None);
-                            } else if command.starts_with("shout ") && command.len() > 6 {
-                                //Shouts to all users. 
-                                let (_, ref msg) = command.split_at(6);
-                                let m = format!("{} shouts: {} ", self.name, msg).to_string();
-                                //Doing this the trivially easy way, just doing a notification for
-                                //that gets pushed to everyone
-                                let send = self.games.borrow_mut().send.clone();
-                                let _ = send.send(Msg::Shout(m));
-                            } else {
-                                //println!("Readable parse");
-                                match self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map",self.map)) {
-                                    Some(game_loop) => {
-                                        game_loop.borrow_mut().send_command(Msg::Command(self.token.clone(),
-                                        command.to_string()));
-                                    },
-                                    None => {},
-                                }
-                            }
-                            n = n - (2 + length);
+                            match std::str::from_utf8(&read[2..2+length]) {
+                                Ok(command) => {
+                                    println!("{}", command);
+                                    //Because I took a shortcut and use the command "end <index>" as an internal command
+                                    //I had to intercept the end_key early.
+                                    if command.starts_with("end_key") {
+                                        println!("End key hit");
+                                    } else if command.starts_with("#tile") {
+                                        //Sends any missing tile art to the client
+                                        match command.split(" ").next().unwrap().parse() {
+                                            Ok(tile) => {
+                                                self.write_tile(tile);
+                                            },
+                                            _ => {},
+                                        }
+                                    } else if command.starts_with("#img") && command.len() > 5 {
+                                        let (_, ref img) = command.split_at(5);
+                                        println!("{}", img);
+                                        self.write_image(img);
+                                    } else if command.starts_with("skin ") && command.len() > 5 {
+                                        //Changes the character skin. Passes on to game loop so the map can change
+                                        //it on the player object as well.
+                                        let (_, ref skin) = command.split_at(5);
+                                        self.skin = skin.to_string();
+                                        match
+                                            self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map", self.map)) {
+                                            Some(game_loop) => {
+                                                game_loop.borrow_mut().send_command(Msg::Command(self.token.clone(),
+                                                command.to_string()));
+                                            },
+                                            None => {},
+                                        }
+                                    } else if command.starts_with("join ") && command.len() > 5 {
+                                        //Join a new map
+                                        let (_, ref map) = command.split_at(5);
+                                        self.join(map, None);
+                                    } else if command.starts_with("shout ") && command.len() > 6 {
+                                        //Shouts to all users. 
+                                        let (_, ref msg) = command.split_at(6);
+                                        let m = format!("{} shouts: {} ", self.name, msg).to_string();
+                                        //Doing this the trivially easy way, just doing a notification for
+                                        //that gets pushed to everyone
+                                        let send = self.games.borrow_mut().send.clone();
+                                        let _ = send.send(Msg::Shout(m));
+                                    } else {
+                                        //println!("Readable parse");
+                                        match self.games.borrow_mut().get_or_create_game_loop(&format!("maps/{}.map",self.map)) {
+                                            Some(game_loop) => {
+                                                game_loop.borrow_mut().send_command(Msg::Command(self.token.clone(),
+                                                command.to_string()));
+                                            },
+                                            None => {},
+                                        }
+                                    }
+                                    n = n - (2 + length);
+                                },
+                                Err(_) => {},
+                            };
                         }
                     } else {
                         break;
