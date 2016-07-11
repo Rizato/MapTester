@@ -22,3 +22,6 @@ maps/
 
 #Images
 images/
+
+#Swap files
+*.swp

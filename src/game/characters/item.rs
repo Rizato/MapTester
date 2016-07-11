@@ -94,4 +94,8 @@ impl Controllable for Item {
     fn get_type(&self) -> ControllableType {
         ControllableType::Item
     }
+
+    fn get_viewport(&self) -> (u8, u8) {
+        (0,0)
+    }
 }

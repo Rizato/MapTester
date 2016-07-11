@@ -531,7 +531,8 @@ impl GameMap {
                     Some(ref p) => {
                         let x = p.get_location() % self.width as u32;
                         let y = p.get_location() / self.width as u32;
-                        Some(MapScreen::new(self, x, y))
+                        let (view_x, view_y) = p.get_viewport();
+                        Some(MapScreen::new(self, x, y, view_x, view_y))
                     },
                     None => {
                         return None;
@@ -734,6 +735,8 @@ impl ScreenTerrain {
 ///specifically, rather than by their position in the array.
 #[derive(Clone)]
 pub struct MapScreen {
+    pub width: i16,
+    pub height: i16,
     //15x15 vector. 
     pub terrain: Vec<ScreenTerrain>,
     //User art at 7,7
@@ -744,17 +747,17 @@ impl MapScreen {
     ///generates a new MapScreen based on the map and a given x & y. This will grab the 15x15
     ///matrix centered on the given x and y. Any spaces beyond the boundaries of the map is replaced
     ///with "empty" tiles
-    pub fn new(map: &GameMap, x: u32, y: u32) -> MapScreen {
-        let startx: isize = x as isize -7;
-        let starty: isize = y as isize -7;
-        let mut ter = Vec::with_capacity(225);
+    pub fn new(map: &GameMap, x: u32, y: u32, size_x: u8, size_y: u8) -> MapScreen {
+        let startx: isize = x as isize -(size_x as isize /2 as isize + 1);
+        let starty: isize = y as isize -(size_y as isize /2 as isize + 1);
+        let mut ter = Vec::with_capacity((size_x+2) as usize *(size_y+2) as usize);
         let mut obj = vec![];
         //If coords are valid we will actually draw something
         let empty = ScreenTerrain::new("terrain/empty".to_string());
         //creates array of tiles
         if map.width as u32 > x && map.height as u32 > y {
-            for i in 0..15 {
-                for j in 0..15 {
+            for i in 0..(size_x as isize+2) {
+                for j in 0..(size_y as isize+2) {
                     if startx+i >= 0 && startx+(i as isize) < (map.width as isize) && starty+(j as isize) >= 0 && starty+(j as isize) < (map.height as isize) {
                         //get the tile from the map
                         let index= ((starty +j) * (map.width as isize)+ (startx+i)) as usize;
@@ -783,6 +786,8 @@ impl MapScreen {
             }
         }
         MapScreen {
+            width: size_x as i16 +2,
+            height: size_y as i16 +2,
             terrain: ter,
             objects: obj,
         }

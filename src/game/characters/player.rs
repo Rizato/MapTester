@@ -39,6 +39,8 @@ pub struct Player{
     pub name: String,
     pub speed: u8,
     pub index: u32,
+    pub viewport_x: u8,
+    pub viewport_y: u8,
     //Coordinates (x, y). This is where the char is currently trying to move to. It has to be interpereted by the Map, and converted to an x, y relative to the actual map, not the user.
     movement: Option<u32>,
     movement_ticks: u8,
@@ -56,6 +58,8 @@ impl Player {
             max_hp: 500,
             name: "empty".to_string(), 
             speed: 10,
+            viewport_x: 13,
+            viewport_y: 13,
             commands: vec![],
             direction: Direction::South,
             index: 0,
@@ -188,9 +192,9 @@ fn hueristic(width: u8, start: u32, end: u32) -> u32{
         let mut neighbors = vec![];
         for dx in 0..3 {
             for dy in 0..3 {
-                if dy == dx || (dx == 0 && dy == 2) || (dx == 2 && dy == 0)  {
-                    continue;
-                }
+                //if dy == dx || (dx == 0 && dy == 2) || (dx == 2 && dy == 0)  {
+                //    continue;
+                //}
                 let current_x = (x as i32) + (dx as i32) -1;
                 let current_y = (y as i32) + (dy as i32) -1;
                 if current_x >=0 && current_y >=0 {
@@ -267,6 +271,7 @@ impl Controllable for Player {
        let c = self.get_command();
        match c {
            Some(command) => {
+              println!("{}", command);
               if command.starts_with("end") {
                   let parts: Vec<&str> = command.split_whitespace().collect();
                   let end = parts[1].parse::<u32>().unwrap();
@@ -300,6 +305,50 @@ impl Controllable for Player {
                           Some(vec![(self.token.clone(), 5,  "No Path Found".to_string()); 1])
                       },
                   }
+              } else if command.starts_with("numpad-") {
+                  let parts: Vec<&str> = command.split("-").collect();
+                  if parts.len() > 1 {
+                      match parts[1].parse::<u32>() {
+                          Ok(numpad) => {
+                              let mut x: u32 = self.index % width as u32;
+                              let mut y: u32 = self.index / width as u32;
+                              match numpad {
+                                  1 => {
+                                      x -= 1;
+                                      y += 1;
+                                  },
+                                  2 => {
+                                      y += 1;
+                                  },
+                                  3 => {
+                                      x += 1;
+                                      y += 1;
+                                  },
+                                  4 => {
+                                      x -= 1;
+                                  },
+                                  6 => {
+                                      x += 1;
+                                  },
+                                  7 => {
+                                      x -= 1;
+                                      y -= 1;
+                                  },
+                                  8 => {
+                                      y -= 1;
+                                  },
+                                  9 => {
+                                      x += 1;
+                                      y -= 1;
+                                  },
+                                  _ => {},
+                              };
+                              self.movement = Some(y * width as u32 + x);
+                          },
+                          Err(_) => {},
+                      };
+                  }
+                  None
               } else if command.starts_with("skin "){
                   let parts: Vec<&str> = command.split(" ").collect();
                   if parts.len() > 1 {
@@ -309,6 +358,15 @@ impl Controllable for Player {
                           self.tile = format!("players/{}.", parts[1]);
                       }
                       Some(vec![(self.token.clone(), 3,  "Skin Changed".to_string()); 1])
+                  } else {
+                      None
+                  }
+              } else if command.starts_with("#view ") {
+                  let parts: Vec<&str> = command.split(" ").collect();
+                  if parts.len() > 2 {
+                      self.viewport_x = parts[1].parse::<u8>().unwrap();
+                      self.viewport_y = parts[2].parse::<u8>().unwrap();
+                      Some(vec![(self.token.clone(), 3,  format!("View Changed {} {}", self.viewport_x, self.viewport_y).to_string()); 1])
                   } else {
                       None
                   }
@@ -383,5 +441,9 @@ impl Controllable for Player {
 
     fn get_type(&self) -> ControllableType {
         ControllableType::Player
+    }
+
+    fn get_viewport(&self) -> (u8, u8) {
+        (self.viewport_x, self.viewport_y)
     }
 }
