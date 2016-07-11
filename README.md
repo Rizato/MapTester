@@ -11,8 +11,7 @@ Check the side bar for links to the game client & map editor (Go to the archived
 
 # Run the server
 
-~~I have a demo version set up at map.rizato.com. The only maps available there are "main" or "cave."~~
-My free trial on the google cloud platform ended, so the demo is no longer available.
+I have a demo version set up at map.rizato.com. The only maps available there are "main" or "cave."
 
 If you want to test your own maps you will have to set up your own instance. 
 It is pretty easy as long as you have a Mac or Linux box available (or you can use one of the many compute cloud engines.)
@@ -30,15 +29,20 @@ It is pretty easy as long as you have a Mac or Linux box available (or you can u
 
 ## Movement
 
-Right now, the map tester only supports mouse movement. This is because it was originally designed to be a moba.
+I finally got around to adding numpad movement. I also made it use diagonals in
+path finding. 
 
-I plan to add some other movement options soon.
+This is in preparation for a mobile client I am building. It
+supports swipe to move.
 
 ## Available Commands
 
-* skin <image>: Change to any image in the players directory. i.e skin paladin **Do not enter the .S/.N/.E/.W**
-* join <map>: Change to a different map in the **maps/** directory
-* shout <message>: Send a message to all other users on the server. Can be up to 4 KB long. 
+* skin \<image\>: Change to any image in the players directory. i.e skin paladin. This now supports other artwork as well. Just enter skin /path/to/art.gif to use any skin. I.E. skin /monsters/dragon/snake_hydra **Do not enter the .S/.N/.E/.W**
+* join \<map\>: Change to a different map in the **maps/** directory
+* shout \<message\>: Send a message to all other users on the server. Can be up to 4 KB long. 
+* \#view \<x\> \<y\>: Don't use this. It is meant for a custom mobile client I am
+  building to allow for zoom. (I have no idea what it will do to the real
+client).
 
 ## Changing Maps
 
@@ -133,20 +137,19 @@ This works with the original Wyvern client. It is compatible with clients runnin
 
 # Dev Priorities
 
-* Add wsad/numpad/arrow key movement
+* Mobile Client
+* Use rust-ecs to improve update loop
 * Doors
 * Code Clean Up (Need to be more idiomatic Rust & better about my int types)
-* Better update loop. (i.e. passing the map itself in the update function)
-* Space themed zone. (Will require a bunch of custom art & some custom code, but should be pretty cool)
 * Speed up adding players to map when entry is blocked.
 
 ## Adding features
 
 ~~If you want to add some more features that the Wyvern client supports check out the [protocol documentation](http://web.archive.org/web/20101121021755/http://cabochon.com/wiz/clients) and [here](http://web.archive.org/web/20101121031823/http://cabochon.com/wiz/client_protocol)~~
 
-The new owner of the old website's domain dissallows ia_archiver, so the entire archive has been retroactively removed.
+The owner of the old website's domain dissallows ia_archiver, so the entire archive has been retroactively removed.
 
-Additionally, because the API from Wyvern is subject to copyright, we obtained permission from the copyright holder to publish that portion of the code.
+Additionally, because the API from Wyvern is subject to copyright, we obtained permission from the copyright holder to publish the reimplemented API.
 
 #License 
 ```
