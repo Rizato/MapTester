@@ -811,9 +811,9 @@ impl Api for Connection {
         let mut s : Vec<u8> = vec![];
         Connection::write_header(&mut s, 24, total as i32);
         //width
-        Connection::write_i16(&mut s,15); 
+        Connection::write_i16(&mut s,screen.width); 
         //height
-        Connection::write_i16(&mut s,15); 
+        Connection::write_i16(&mut s,screen.height); 
         //zipped len
         Connection::write_i32(&mut s,z_len as i32); 
         //ulen

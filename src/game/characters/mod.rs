@@ -79,4 +79,6 @@ pub trait Controllable {
     fn modify_connected_tiles(&mut self, width: u8, height: u8,  objects : &Vec<bool>);
     ///Returns a type because rust does not have instanceOf.
     fn get_type(&self) -> ControllableType;
+    ///Returns the dimensions of the screen to send down
+    fn get_viewport(&self) -> (u8, u8);
 }

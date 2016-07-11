@@ -102,4 +102,8 @@ impl Controllable for Teleporter{
     fn get_type(&self) -> ControllableType {
         ControllableType::Teleporter
     }
+
+    fn get_viewport(&self) -> (u8, u8) {
+        (0,0)
+    }
 }

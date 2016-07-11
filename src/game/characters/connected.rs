@@ -232,4 +232,8 @@ impl Controllable for RoadWall{
     
     fn set_movement(&mut self, _: u32) {
     }
+    
+    fn get_viewport(&self) -> (u8, u8) {
+        (0,0)
+    }
 }

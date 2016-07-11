@@ -39,6 +39,8 @@ pub struct Player{
     pub name: String,
     pub speed: u8,
     pub index: u32,
+    pub viewport_x: u8,
+    pub viewport_y: u8,
     //Coordinates (x, y). This is where the char is currently trying to move to. It has to be interpereted by the Map, and converted to an x, y relative to the actual map, not the user.
     movement: Option<u32>,
     movement_ticks: u8,
@@ -56,6 +58,8 @@ impl Player {
             max_hp: 500,
             name: "empty".to_string(), 
             speed: 10,
+            viewport_x: 13,
+            viewport_y: 13,
             commands: vec![],
             direction: Direction::South,
             index: 0,
@@ -357,6 +361,15 @@ impl Controllable for Player {
                   } else {
                       None
                   }
+              } else if command.starts_with("#view ") {
+                  let parts: Vec<&str> = command.split(" ").collect();
+                  if parts.len() > 2 {
+                      self.viewport_x = parts[1].parse::<u8>().unwrap();
+                      self.viewport_y = parts[2].parse::<u8>().unwrap();
+                      Some(vec![(self.token.clone(), 3,  format!("View Changed {} {}", self.viewport_x, self.viewport_y).to_string()); 1])
+                  } else {
+                      None
+                  }
               }else {
                   //System message
                   println!("{}", command);
@@ -428,5 +441,9 @@ impl Controllable for Player {
 
     fn get_type(&self) -> ControllableType {
         ControllableType::Player
+    }
+
+    fn get_viewport(&self) -> (u8, u8) {
+        (self.viewport_x, self.viewport_y)
     }
 }
