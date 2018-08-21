@@ -34,14 +34,14 @@ use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
 
-/// This is the source for a MOBA server that is compatible with a preexisting game client. 
+/// This is the source for a MOBA server that is compatible with a preexisting game client.
 
 fn main() {
     //This section starts up a tcp socket listening on port 2222, per the client docs
     println!("starting");
 
     let (tx, _rx) = mpsc::unbounded();
-    // I need to figure out how to create the game here before the process_socket. 
+    // I need to figure out how to create the game here before the process_socket.
     let game = Arc::new(Mutex::new(SharedState::new(tx)));
 
     let addr: SocketAddr = "0.0.0.0:2222".parse().unwrap();

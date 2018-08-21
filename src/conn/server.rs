@@ -78,8 +78,8 @@ impl Future for Player {
         // find out that the socket is closed below, or we will end up doing another rotation if it
         // isn't.
         self.codec.flush_write_buffer()?;
-       
-        // So msg, is an option. If it is none, we return Async::Ready. If poll returns 
+
+        // So msg, is an option. If it is none, we return Async::Ready. If poll returns
         // NotReady, we skip this and hit NotReady.
         while let Async::Ready(msg) = self.codec.poll()? {
             if let Some(m) = msg {

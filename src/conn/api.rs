@@ -30,7 +30,7 @@ use std::fs::File;
 //use game::gamemap::MapScreen;
 
 /// This game module handles the API for the wyvern client. It only implements part of the API, as
-/// documented on the wyvern website. 
+/// documented on the wyvern website.
 ///
 /// It also covers things like writing larger than 8 bit numbers to a u8 vector. (with varying
 /// endiannes, as described in the API)
@@ -116,7 +116,7 @@ impl Codec {
                 let version = std::str::from_utf8(&version_utf[..]).unwrap();
                 return Ok(Async::Ready(Some(Login::new(height, width, name, pw, version))));
             }
-        } 
+        }
         Ok(Async::NotReady)
     }
 
@@ -132,7 +132,7 @@ impl Codec {
 
         loop {
             if buf.len() >= 3 {
-                //Must be over 3 in length. 
+                //Must be over 3 in length.
                 let length = buf.split_to(2).iter().fold(0usize,| total, x | total  << 8 | *x as usize);
                 if buf.len() >= 2 + length {
                     let command_utf =  buf.split_to(length);
@@ -157,7 +157,7 @@ impl Codec {
     pub fn flush_write_buffer(&mut self) -> Poll<(), io::Error> {
         while !self.output_buffer.is_empty() {
             let n = try_ready!(self.socket.poll_write(&self.output_buffer));
-            
+
             self.output_buffer.split_to(n);
         }
 
@@ -175,7 +175,7 @@ impl Codec {
             //    self.write_zipped_screen(screen);
             //},
             Msg::Shout(msg) => {
-                self.write_text_out(4,&msg); 
+                self.write_text_out(4,&msg);
             },
             Msg::LoginResult(result, message) => {
                 self.write_conn_result(result, &message);
@@ -232,13 +232,13 @@ impl Stream for Codec {
                 _ => {},
             }
             self.logged_in = true;
-        } 
+        }
 
         let sock_closed = self.fill_read_buffer()?.is_ready();
 
         if self.input.len() > 0 {
             let msg = self.input.remove(0);
-            return Ok(Async::Ready(Some(msg))); 
+            return Ok(Async::Ready(Some(msg)));
         }
 
         if sock_closed {
@@ -352,7 +352,7 @@ impl Api for Codec {
         //conn.extend("Failed".as_bytes());
         self.output_buffer.extend_from_slice(&conn[..]);
     }
-    
+
     fn write_quit(&mut self) {
         //println!("Quit");
         //quit indication
@@ -360,7 +360,7 @@ impl Api for Codec {
         Codec::write_header(&mut q, 13, 0);
         self.output_buffer.extend_from_slice(&q[..]);
     }
-    
+
     fn write_tile_mappings(&mut self, mappings: HashMap<String, i16>) {
         //println!("Mappings");
         //Read map files. Write out entire output.
@@ -416,17 +416,17 @@ impl Api for Codec {
         Codec::write_timestamp(&mut buf);
         self.output_buffer.extend_from_slice(&buf[..]);
     }
-    
+
     fn write_text_out(&mut self, style: u8, message: &str) {
         //println!("Text Out");
         let mut m: Vec<u8> = vec![];
         //text out byte
         Codec::write_header(&mut m, 11, (message.len()+3) as i32);
         m.push(style);
-        Codec::write_string(&mut m, message); 
+        Codec::write_string(&mut m, message);
         self.output_buffer.extend_from_slice(&m[..]);
     }
-    
+
     //fn write_zipped_screen(&mut self, screen: MapScreen) {
     //    //Convert MapScreen to zipped screen.
     //    let mut uncompressed: Vec<u8> = vec![];
@@ -441,7 +441,7 @@ impl Api for Codec {
     //        uncompressed.push(object.y);
     //        uncompressed.push(object.x);
     //        Codec::write_i16_reversed(&mut uncompressed, terrain.mapping.clone() as i16);
-    //        
+    //
     //    }
     //    //println!("Zipped screen");
     //    let u_len = uncompressed.len();
@@ -451,13 +451,13 @@ impl Api for Codec {
     //    let mut s : Vec<u8> = vec![];
     //    Codec::write_header(&mut s, 24, total as i32);
     //    //width
-    //    Codec::write_i16(&mut s,screen.width); 
+    //    Codec::write_i16(&mut s,screen.width);
     //    //height
-    //    Codec::write_i16(&mut s,screen.height); 
+    //    Codec::write_i16(&mut s,screen.height);
     //    //zipped len
-    //    Codec::write_i32(&mut s,z_len as i32); 
+    //    Codec::write_i32(&mut s,z_len as i32);
     //    //ulen
-    //    Codec::write_i32(&mut s,u_len as i32); 
+    //    Codec::write_i32(&mut s,u_len as i32);
     //    //zipped contents
     //    s.append(&mut compressed);
     //    self.output_buffer.extend_from_slice(&s[..]);
@@ -485,7 +485,7 @@ impl Api for Codec {
         Codec::write_i32(&mut n, amount);
         self.output_buffer.extend_from_slice(&n[..]);
     }
-    
+
     fn write_stat_level(&mut self, level: u8, xp: i32) {
         //println!("Write level");
         let mut n = vec![];
@@ -511,7 +511,7 @@ impl Api for Codec {
         Codec::write_i32(&mut n, mfood);
         self.output_buffer.extend_from_slice(&n[..]);
     }
-                      
+
     fn write_ground_add(&mut self, name: &str, commands: &str, tile: i16, index: i16, offsets: i16) {
         //println!("Write ground add {}", name);
         let mut n = vec![];
@@ -523,7 +523,7 @@ impl Api for Codec {
         Codec::write_i16(&mut n, offsets);
         self.output_buffer.extend_from_slice(&n[..]);
     }
-    
+
     fn write_inv_add(&mut self, name: &str, commands: &str, tile: i16, index: i16, offsets: i16) {
         //println!("Write inv add {}", name);
         let mut n = vec![];
@@ -535,7 +535,7 @@ impl Api for Codec {
         Codec::write_i16(&mut n, offsets);
         self.output_buffer.extend_from_slice(&n[..]);
     }
-    
+
     fn zip_data(data: Vec<u8> ) -> Vec<u8> {
         //println!("ZIP");
         let d = data.len();
