@@ -45,7 +45,7 @@ use tokio::prelude::*;
 
 fn main() -> Result<(), io::Error> {
     println!("starting");
-    let mut rt = Runtime::new()?;
+
 
     // Create gameloop on same runtime as server
     let (tx, rx) = mpsc::unbounded();
@@ -77,10 +77,11 @@ fn main() -> Result<(), io::Error> {
         println!("Conn Error: {:?}", e);
     });
 
-    // Start the game. Block on the server (Run forever)
+    // Start the gameloop in one backend, the main thing in a blocking runtime
+    // The docs define rt.block_on, but it didn't exist when I tried to compile
+    let mut rt = Runtime::new().unwrap();
     rt.spawn(gameloop);
-    rt.spawn(server);
-    rt.shutdown_on_idle();
+    tokio::run(server);
     Ok(())
 }
 
