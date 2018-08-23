@@ -15,6 +15,7 @@ limitations under the License.*/
 
 
 pub mod conn;
+pub mod game;
 
 extern crate tokio;
 #[macro_use]
@@ -24,34 +25,48 @@ extern crate time;
 extern crate xml;
 extern crate glob;
 extern crate bytes;
+extern crate uuid;
 
-use conn::{Tx};
+use conn::{Tx, Rx};
 use conn::api::Codec;
-use conn::server::Player;
+use conn::player::Player;
+use game::Game;
 use futures::sync::mpsc;
 use std::sync::{Mutex, Arc};
 use std::net::SocketAddr;
+use std::time::{Instant, Duration};
+use std::io;
 use tokio::net::TcpListener;
+use tokio::runtime::Runtime;
+use tokio::timer::Interval;
 use tokio::prelude::*;
 
 /// This is the source for a MOBA server that is compatible with a preexisting game client.
 
-fn main() {
-    //This section starts up a tcp socket listening on port 2222, per the client docs
+fn main() -> Result<(), io::Error> {
     println!("starting");
+    let mut rt = Runtime::new()?;
 
-    let (tx, _rx) = mpsc::unbounded();
-    // I need to figure out how to create the game here before the process_socket.
-    let game = Arc::new(Mutex::new(SharedState::new(tx)));
+    // Create gameloop on same runtime as server
+    let (tx, rx) = mpsc::unbounded();
+    let mut game = Game::new(rx);
+    let gameloop = Interval::new(Instant::now(), Duration::from_millis(15)).for_each(move |_| {
+        game.poll().unwrap();
+        Ok(())
+    })
+    .map_err(|e| {
+        println!("Gameloop Error: {:?}", e);
+    });
+
+    let shared = Arc::new(Mutex::new(SharedState::new(tx)));
 
     let addr: SocketAddr = "0.0.0.0:2222".parse().unwrap();
-    let listener = TcpListener::bind(&addr).unwrap();
-
-
+    let listener = TcpListener::bind(&addr)?;
+    // Standup the server
     let server = listener.incoming().for_each(move |socket| {
         let codec = Codec::new(socket);
 
-        let player = Player::new(game.clone(), codec)
+        let player = Player::new(shared.clone(), codec)
             .map_err(|e| {
                 println!("Player Error: {:?}", e);
             });
@@ -62,7 +77,11 @@ fn main() {
         println!("Conn Error: {:?}", e);
     });
 
-    tokio::run(server);
+    // Start the game. Block on the server (Run forever)
+    rt.spawn(gameloop);
+    rt.spawn(server);
+    rt.shutdown_on_idle();
+    Ok(())
 }
 
 pub struct SharedState {

@@ -14,6 +14,7 @@ glob = "0.2.11"
 tokio = "0.1"
 bytes = "0.4.5"
 futures = "0.1.21"
+uuid = { version = "0.6", features = ["v4"] }
 
 [[bin]]
 

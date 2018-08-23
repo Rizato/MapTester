@@ -24,14 +24,10 @@ use std::net::SocketAddr;
 use tokio::io;
 use tokio::prelude::*;
 
-/// This module contains all of the client facing code. It handles all of the MIO stuff, and user
-/// states and such.
+/// This module defines the player struct.
 ///
-/// There are two main structs here. Server & Connection. Server is of traight Handler, and
-/// implements the mio callbacks. Connection implements the client RPC API.
-///
-/// It also declares an enum to handle the connection state, and the Msg protocol used for comms
-/// between the connections and game loop.
+/// Player is a future that polls the codec channel and passes the data
+/// to the game channel
 
 pub struct Player {
     game: Arc<Mutex<SharedState>>,

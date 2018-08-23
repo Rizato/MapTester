@@ -103,8 +103,8 @@ impl Codec {
         if number > 17 {
             let first_value = buf.split_to(4)[..].iter().fold(0i32, |sum, x| sum  << 8 | *x as i32);
             if first_value == 1 {
-                let height = buf.split_to(2)[..].iter().fold(0i16, |sum, x| sum << 8 | *x as i16);
-                let width = buf.split_to(2)[..].iter().fold(0i16, |sum, x| sum << 8 | *x as i16);
+                let height = buf.split_to(2)[..].iter().fold(0u32, |sum, x| sum << 8 | *x as u32);
+                let width = buf.split_to(2)[..].iter().fold(0u32, |sum, x| sum << 8 | *x as u32);
                 let name_len = buf.split_to(2)[..].iter().fold(0usize, |sum, x| sum << 8 | *x as usize);
                 let name_utf = buf.split_to(name_len);
                 let name = std::str::from_utf8(&name_utf[..]).unwrap();

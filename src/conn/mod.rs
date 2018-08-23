@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.*/
 
 ///This just declares a couple more modules
-pub mod server;
+pub mod player;
 pub mod api;
 
 use futures::sync::mpsc;
@@ -46,16 +46,17 @@ pub enum Msg {
     TileMapping(HashMap<String, i16>),
 }
 
+// TODO Login should be a future that hits a DB to pull login info
 pub struct Login {
-    pub height: i16,
-    pub width: i16,
+    pub height: u32,
+    pub width: u32,
     pub name: String,
     pub password: String,
     pub version: String,
 }
 
 impl Login {
-    pub fn new(height: i16, width: i16, name: &str, password: &str, version: &str) -> Self {
+    pub fn new(height: u32, width: u32, name: &str, password: &str, version: &str) -> Self {
         Login {
             height,
             width,
