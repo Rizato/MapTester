@@ -35,7 +35,7 @@ use futures::sync::mpsc;
 use std::sync::{Mutex, Arc};
 use std::net::SocketAddr;
 use std::time::{Instant, Duration};
-use std::io;
+use tokio::io;
 use tokio::net::TcpListener;
 use tokio::runtime::Runtime;
 use tokio::timer::Interval;
