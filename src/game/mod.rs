@@ -15,22 +15,25 @@ limitations under the License.*/
 
 /// This module holds the game object. It has the Game struct
 
-// pub mod gameloop;
-// pub mod gamemap;
-// pub mod characters;
+pub mod map;
+pub mod camera;
+pub mod characters;
 
-use glob::glob;
 use std::io::prelude::*;
 use std::io::Error;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::net::SocketAddr;
+use glob::glob;
 use uuid::Uuid;
 use tokio::prelude::*;
 
 use conn::Msg;
 use conn::{Tx, Rx};
+use self::map::Map;
+use self::camera::Camera;
+use self::characters::{Npc, Pc, Character};
 
 pub struct Game {
     rx: Rx,
@@ -38,18 +41,21 @@ pub struct Game {
     pcs: HashMap<Uuid, Pc>,
     npcs: Vec<Npc>,
     maps: HashMap<String, Map>,
+    mappings: HashMap<String, i16>,
 }
 
 // This should implement future, because it is not some function used by a future, it is actually the task to be performed
 // Whereas poll_login, is a task the future waits on.
 impl Game {
     pub fn new(rx: Rx) -> Self {
+        let mappings = Game::create_mappings();
         Game {
             rx: rx,
             connections: HashMap::new(),
             pcs: HashMap::new(),
             npcs: Vec::new(),
             maps: HashMap::new(),
+            mappings: mappings,
         }
     }
 
@@ -90,9 +96,10 @@ impl Game {
                                     self.pcs.insert(connection.id, player);
                                     // TODO Add to lobby
                                 }
-
+                                tx.unbounded_send(Msg::TileMapping(self.mappings.clone()));
                             }
                         }
+
                     },
                     Msg::Timeout(addr) => {
                         self.connections.remove(&addr);
@@ -132,7 +139,7 @@ impl Game {
         Ok(Async::NotReady)
     }
 
-    pub fn create_mappings() -> HashMap<String, i16> {
+    fn create_mappings() -> HashMap<String, i16> {
         let mut m: HashMap<String,i16> = HashMap::new();
         let tile_file = File::open("file_full").unwrap();
         let mut reader = BufReader::new(tile_file);
@@ -171,90 +178,16 @@ impl Connection {
     }
 }
 
-trait Character {
-    fn build_auto_queue(map: Map);
-    fn poll_execute() -> Poll<(), Error>;
+pub struct Point {
+    x: u32,
+    y: u32,
 }
 
-pub struct Pc {
-    id: Uuid,
-    name: String,
-    input_queue: Vec<Msg>,
-    action_queue: Vec<Msg>,
-    camera: Camera,
-}
-
-impl Pc {
-    pub fn new (id: Uuid, name: &str, camera: Camera) -> Self {
-        Pc {
-            id: id,
-            camera: camera,
-            name: name.to_string(),
-            input_queue: Vec::new(),
-            action_queue: Vec::new(),
+impl Point {
+    fn new(x: &u32, y: &u32) -> Self {
+        Point {
+            x: x.clone(),
+            y: y.clone(),
         }
-    }
-
-    pub fn add_command(&self, command: &str) {
-        println!("{}", command);
-    }
-}
-
-impl Character for Pc {
-
-    fn build_auto_queue(map: Map) {
-
-    }
-
-    fn poll_execute() -> Poll<(), Error> {
-        Ok(Async::NotReady)
-    }
-}
-
-pub struct Npc {
-
-}
-
-impl Npc {
-    fn new() -> Self {
-        Npc {}
-    }
-}
-
-impl Character for Npc {
-    fn build_auto_queue(map: Map) {
-
-    }
-
-    fn poll_execute() -> Poll<(), Error> {
-        Ok(Async::NotReady)
-    }
-}
-
-pub struct Camera {
-    width: u32,
-    height: u32,
-}
-
-impl Camera {
-    fn new(width: &u32, height: &u32) -> Self {
-        Camera{
-            width: width.clone(),
-            height: height.clone(),
-        }
-    }
-
-    fn poll_capture_snapshot() {
-
-    }
-}
-
-pub struct Map {
-
-}
-
-impl Map {
-    fn new() -> Self {
-        Map{}
     }
 }
