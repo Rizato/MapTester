@@ -35,6 +35,14 @@ use self::map::Map;
 use self::camera::Camera;
 use self::characters::{Npc, Pc, Character};
 
+pub enum Command {
+    Move(Point), // Move to position
+    Shoot(Point, u32, u32), // Dest(x,y), Hit, Damage
+    Attack(Uuid, u32, u32), // Target, Hit, Damage
+    Shout(String), // Message
+    Whisper(String, String) // Name, Message
+}
+
 pub struct Game {
     rx: Rx,
     connections: HashMap<SocketAddr, Connection>,
@@ -99,7 +107,6 @@ impl Game {
                                 tx.unbounded_send(Msg::TileMapping(self.mappings.clone()));
                             }
                         }
-
                     },
                     Msg::Timeout(addr) => {
                         self.connections.remove(&addr);

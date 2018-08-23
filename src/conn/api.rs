@@ -137,13 +137,7 @@ impl Codec {
                 if buf.len() >= 2 + length {
                     let command_utf =  buf.split_to(length);
                     let command =  str::from_utf8(&command_utf[..]).unwrap();
-                    //Because I took a shortcut and use the command "end <index>" as an internal command
-                    //I had to intercept the end_key early.
-                    if command.starts_with("end_key") {
-                        println!("End key hit");
-                    } else {
-                        self.input.push(Msg::Command(addr, command.to_owned()));
-                    }
+                    self.input.push(Msg::Command(addr, command.to_owned()));
                 } else {
                     return Ok(Async::NotReady);
                 }
