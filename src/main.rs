@@ -46,8 +46,6 @@ use tokio::prelude::*;
 fn main() -> Result<(), io::Error> {
     println!("starting");
 
-
-    // Create gameloop on same runtime as server
     let (tx, rx) = mpsc::unbounded();
     let mut game = Game::new(rx);
     let gameloop = Interval::new(Instant::now(), Duration::from_millis(15)).for_each(move |_| {
