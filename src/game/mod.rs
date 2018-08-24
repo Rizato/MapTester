@@ -18,6 +18,7 @@ limitations under the License.*/
 pub mod map;
 pub mod camera;
 pub mod characters;
+pub mod command;
 
 use std::io::prelude::*;
 use std::io::Error;
@@ -34,14 +35,6 @@ use conn::{Tx, Rx};
 use self::map::Map;
 use self::camera::Camera;
 use self::characters::{Npc, Pc, Character};
-
-pub enum Command {
-    Move(Point), // Move to position
-    Shoot(Point, u32, u32), // Dest(x,y), Hit, Damage
-    Attack(Uuid, u32, u32), // Target, Hit, Damage
-    Shout(String), // Message
-    Whisper(String, String) // Name, Message
-}
 
 pub struct Game {
     rx: Rx,
