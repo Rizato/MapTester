@@ -1,4 +1,5 @@
 use game::map::Map;
+use game::Point;
 
 pub struct Camera {
     width: u32,
@@ -13,8 +14,25 @@ impl Camera {
         }
     }
 
-    pub fn poll_capture_snapshot(&self, x: &u32, y: &u32, width: &u32, height: &u32, map: &Map) {
-
+    pub fn poll_capture_snapshot(&self, location: &Point, width: &u32, height: &u32, map: &Map) {
+    //     match self.find_player_with_token(token.clone()) {
+    //         Some(index) => {
+    //             match self.objects.get(index) {
+    //                 Some(ref p) => {
+    //                     let x = p.get_location() % self.width as u32;
+    //                     let y = p.get_location() / self.width as u32;
+    //                     let (view_x, view_y) = p.get_viewport();
+    //                     Some(MapScreen::new(self, x, y, view_x, view_y))
+    //                 },
+    //                 None => {
+    //                     return None;
+    //                 },
+    //             }
+    //         },
+    //         None => {
+    //             return None;
+    //         },
+    //     }
     }
 }
 

@@ -35,12 +35,12 @@ use conn::{Tx, Rx};
 use self::map::Map;
 use self::camera::Camera;
 use self::characters::{Npc, Pc, Character};
+use self::command::Command;
 
 pub struct Game {
     rx: Rx,
     connections: HashMap<SocketAddr, Connection>,
     pcs: HashMap<Uuid, Pc>,
-    npcs: Vec<Npc>,
     maps: HashMap<String, Map>,
     mappings: HashMap<String, i16>,
 }
@@ -54,7 +54,6 @@ impl Game {
             rx: rx,
             connections: HashMap::new(),
             pcs: HashMap::new(),
-            npcs: Vec::new(),
             maps: HashMap::new(),
             mappings: mappings,
         }
@@ -129,12 +128,45 @@ impl Game {
             }
         }
 
-        // Poll each map
-        //   Map Polls each item
-        // The problem with map commands, is the shout commands. Those need
-        // access to all other players.
+        for (name, map) in self.maps.iter_mut() {
+            let players = &map.players.clone();
+            for (id, position) in players {
+                if let Some(ref mut player) = self.pcs.get_mut(&id) {
+                    let mut commands: Vec<Command> = Vec::new();
+                    if let Some(movement) = player.next_movement(&map, &position) {
+                        commands.push(movement);
+                    }
 
-        // Could access to other players be in sharedstate (main.rs) and then used inside Player? (server.rs)
+                    for command in commands {
+                        match command {
+                            Command::Whisper(target, message) => {
+
+                            },
+                            Command::Shout(message) => {
+
+                            },
+                            c => {
+                                map.queue(c);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // This gives back commands that require action external to the map (Teleportations & Respawns)
+            let reactions = map.execute();
+            for reaction in reactions {
+                match reaction {
+                    Command::Respawn(Uuid) => {
+
+                    },
+                    Command::Teleport(target, map, ask_map, suggested_spot) => {
+
+                    },
+                    _ => {},
+                }
+            }
+        }
 
         Ok(Async::NotReady)
     }
@@ -178,6 +210,7 @@ impl Connection {
     }
 }
 
+#[derive(Clone, Eq, PartialEq)]
 pub struct Point {
     x: u32,
     y: u32,
@@ -189,5 +222,19 @@ impl Point {
             x: x.clone(),
             y: y.clone(),
         }
+    }
+
+    fn from_index(index: &u32, width: &u32) -> Self {
+        let x = index % width;
+        let y = index / width;
+        Point {
+            x: x,
+            y: y
+        }
+    }
+
+    fn to_index(self, width: &u32) -> u32 {
+        // Convert x,y to a single index for a 1d array representing a 2d map
+        self.y * width
     }
 }
