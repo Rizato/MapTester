@@ -19,18 +19,18 @@ use std::str::SplitWhitespace;
 
 use uuid::Uuid;
 
-use game::Point;
 use game::characters::Character;
+use game::Point;
 
 pub enum Command {
-    MoveTarget(Point), // Move to position
-    MoveStep(Uuid, Point, Direction), // Target, Move to position
-    Shoot(Point, u32, u32), // Dest(x,y), Hit, Damage
-    Attack(Uuid, u32, u32), // Target, Hit, Damage
-    Shout(String), // Message
-    Whisper(String, String), // Name, Message
+    MoveTarget(Point),                   // Move to position
+    MoveStep(Uuid, Point, Direction),    // Target, Move to position
+    Shoot(Point, u32, u32),              // Dest(x,y), Hit, Damage
+    Attack(Uuid, u32, u32),              // Target, Hit, Damage
+    Shout(String),                       // Message
+    Whisper(String, String),             // Name, Message
     Teleport(Uuid, String, bool, Point), // Target, Map, Ask map?, Location
-    Respawn(Uuid) // Respawn character
+    Respawn(Uuid),                       // Respawn character
 }
 
 pub enum Direction {
@@ -51,7 +51,7 @@ pub struct CommandParser {
 impl CommandParser {
     pub fn new(command: &str) -> Self {
         CommandParser {
-            command: command.to_string()
+            command: command.to_string(),
         }
     }
 
@@ -59,18 +59,13 @@ impl CommandParser {
         let mut parts = self.command.split_whitespace();
         if let Some(first) = parts.next() {
             return match first {
-                "shout" => {
-                    CommandParser::parse_shout(parts)
-                },
-                "mouse" => {
-                    CommandParser::parse_mouse(parts)
-                },
-                "whisper" => {
-                    CommandParser::parse_whisper(parts)
-                },
-                _ => {
-                    Err(CommandError::new(&format!("Command {} not recognized", first)))
-                },
+                "shout" => CommandParser::parse_shout(parts),
+                "mouse" => CommandParser::parse_mouse(parts),
+                "whisper" => CommandParser::parse_whisper(parts),
+                _ => Err(CommandError::new(&format!(
+                    "Command {} not recognized",
+                    first
+                ))),
             };
         }
         Err(CommandError::new("Invalid Command"))
@@ -82,10 +77,8 @@ impl CommandParser {
             Some(target) => {
                 let rest = command.fold(String::new(), |acc, x| format!("{} {}", acc, x));
                 Ok(Command::Whisper(target.to_string(), rest.to_string()))
-            },
-            None => {
-                Err(CommandError::new("No whisper target"))
-            },
+            }
+            None => Err(CommandError::new("No whisper target")),
         }
     }
 
@@ -109,18 +102,18 @@ impl CommandParser {
                     }
                 }
             }
-                // let parts: Vec<&str> = command.split_whitespace().collect();
-                // //Mouse click x,y
-                // let mx = parts[1].parse::<i32>().unwrap();
-                // let my = parts[2].parse::<i32>().unwrap();
-                // //old x,y
-                // let oy = p.get_location() / (self.width as u32);
-                // let ox = p.get_location() % (self.width as u32);
-                // //change in x,y. -6 cause user is always in middle of screen, no matter the click.
-                // let dx = if ox as i32 + mx > 6 { ox + mx as u32 -6 } else {0};
-                // let dy = if oy as i32 + my > 6 { oy + my as u32 -6 } else {0};
-                // println!("Move to x{} y{}", dx, dy);
-                // let end = dy * self.width as u32 + dx;
+            // let parts: Vec<&str> = command.split_whitespace().collect();
+            // //Mouse click x,y
+            // let mx = parts[1].parse::<i32>().unwrap();
+            // let my = parts[2].parse::<i32>().unwrap();
+            // //old x,y
+            // let oy = p.get_location() / (self.width as u32);
+            // let ox = p.get_location() % (self.width as u32);
+            // //change in x,y. -6 cause user is always in middle of screen, no matter the click.
+            // let dx = if ox as i32 + mx > 6 { ox + mx as u32 -6 } else {0};
+            // let dy = if oy as i32 + my > 6 { oy + my as u32 -6 } else {0};
+            // println!("Move to x{} y{}", dx, dy);
+            // let end = dy * self.width as u32 + dx;
         }
         Err(CommandError::new("Could not parse mouse input."))
     }
@@ -134,7 +127,7 @@ pub struct CommandError {
 impl CommandError {
     pub fn new(message: &str) -> Self {
         CommandError {
-            message: message.to_string()
+            message: message.to_string(),
         }
     }
 }

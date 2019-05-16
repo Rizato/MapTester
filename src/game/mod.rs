@@ -13,29 +13,28 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.*/
 
-/// This module holds the game object. It has the Game struct
-
-pub mod map;
 pub mod camera;
 pub mod characters;
 pub mod command;
+/// This module holds the game object. It has the Game struct
+pub mod map;
 
-use std::io::prelude::*;
-use std::io::Error;
+use glob::glob;
 use std::collections::HashMap;
 use std::fs::File;
+use std::io::prelude::*;
 use std::io::BufReader;
+use std::io::Error;
 use std::net::SocketAddr;
-use glob::glob;
-use uuid::Uuid;
 use tokio::prelude::*;
+use uuid::Uuid;
 
-use conn::Msg;
-use conn::{Tx, Rx};
-use self::map::Map;
 use self::camera::Camera;
-use self::characters::{Npc, Pc, Character};
+use self::characters::{Character, Npc, Pc};
 use self::command::Command;
+use self::map::Map;
+use conn::Msg;
+use conn::{Rx, Tx};
 
 pub struct Game {
     rx: Rx,
@@ -74,7 +73,11 @@ impl Game {
                             for (address, existing) in self.connections.iter() {
                                 if let Some(ref pc) = self.pcs.get(&existing.id) {
                                     if pc.name == login.name {
-                                        tx.send(Msg::LoginResult(3, "User already logged in".to_string())).unwrap();
+                                        tx.send(Msg::LoginResult(
+                                            3,
+                                            "User already logged in".to_string(),
+                                        ))
+                                        .unwrap();
                                         exists = true;
                                     }
                                 }
@@ -92,35 +95,34 @@ impl Game {
 
                                 if !exists {
                                     // Create new player
-                                    let player = Pc::new(connection.id.clone(), &login.name, camera);
+                                    let player =
+                                        Pc::new(connection.id.clone(), &login.name, camera);
                                     self.pcs.insert(connection.id, player);
                                     // TODO Add to lobby
                                 }
                                 tx.unbounded_send(Msg::TileMapping(self.mappings.clone()));
                             }
                         }
-                    },
+                    }
                     Msg::Timeout(addr) => {
                         self.connections.remove(&addr);
-                    },
-                    Msg::Command(addr, command) => {
-                        match self.connections.get(&addr) {
-                            Some(ref conn) => {
-                                let ref id = &conn.id;
-                                if let Some(ref pc) = self.pcs.get(id) {
-                                    pc.add_command(&command);
-                                }
-                            },
-                            None => {
-                                println!("Address {:?} does not have an open connection", addr);
-                            },
+                    }
+                    Msg::Command(addr, command) => match self.connections.get(&addr) {
+                        Some(ref conn) => {
+                            let ref id = &conn.id;
+                            if let Some(ref pc) = self.pcs.get(id) {
+                                pc.add_command(&command);
+                            }
+                        }
+                        None => {
+                            println!("Address {:?} does not have an open connection", addr);
                         }
                     },
                     Msg::Connect(addr, tx) => {
                         let id = Uuid::new_v4();
                         let connection = Connection::new(tx, id);
                         self.connections.insert(addr, connection);
-                    },
+                    }
                     _ => {
                         println!("This command shouldn't be sent to the game");
                     }
@@ -139,12 +141,8 @@ impl Game {
 
                     for command in commands {
                         match command {
-                            Command::Whisper(target, message) => {
-
-                            },
-                            Command::Shout(message) => {
-
-                            },
+                            Command::Whisper(target, message) => {}
+                            Command::Shout(message) => {}
                             c => {
                                 map.queue(c);
                             }
@@ -157,13 +155,9 @@ impl Game {
             let reactions = map.execute();
             for reaction in reactions {
                 match reaction {
-                    Command::Respawn(Uuid) => {
-
-                    },
-                    Command::Teleport(target, map, ask_map, suggested_spot) => {
-
-                    },
-                    _ => {},
+                    Command::Respawn(Uuid) => {}
+                    Command::Teleport(target, map, ask_map, suggested_spot) => {}
+                    _ => {}
                 }
             }
         }
@@ -172,7 +166,7 @@ impl Game {
     }
 
     fn create_mappings() -> HashMap<String, i16> {
-        let mut m: HashMap<String,i16> = HashMap::new();
+        let mut m: HashMap<String, i16> = HashMap::new();
         let tile_file = File::open("file_full").unwrap();
         let mut reader = BufReader::new(tile_file);
         let mut line: String = String::new();
@@ -185,11 +179,14 @@ impl Game {
         for entry in glob("images/**/*.gif").unwrap() {
             match entry {
                 Ok(img) => {
-                    m.insert(img.file_stem().unwrap().to_str().unwrap().to_string(), count);
+                    m.insert(
+                        img.file_stem().unwrap().to_str().unwrap().to_string(),
+                        count,
+                    );
                     count = count + 1;
                     println!("{} {}", img.display(), count);
-                },
-                _ => {},
+                }
+                _ => {}
             }
         }
         return m;
@@ -203,10 +200,7 @@ pub struct Connection {
 
 impl Connection {
     fn new(tx: Tx, id: Uuid) -> Self {
-        Connection {
-            tx: tx,
-            id: id
-        }
+        Connection { tx: tx, id: id }
     }
 }
 
@@ -227,10 +221,7 @@ impl Point {
     fn from_index(index: &u32, width: &u32) -> Self {
         let x = index % width;
         let y = index / width;
-        Point {
-            x: x,
-            y: y
-        }
+        Point { x: x, y: y }
     }
 
     fn to_index(self, width: &u32) -> u32 {

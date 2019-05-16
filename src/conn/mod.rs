@@ -13,13 +13,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.*/
 
+pub mod api;
 ///This just declares a couple more modules
 pub mod player;
-pub mod api;
 
 use futures::sync::mpsc;
-use std::net::SocketAddr;
+use game::camera::MapScreen;
 use std::collections::HashMap;
+use std::net::SocketAddr;
 
 pub type Tx = mpsc::UnboundedSender<Msg>;
 pub type Rx = mpsc::UnboundedReceiver<Msg>;
@@ -39,7 +40,7 @@ pub enum Msg {
     Xp(i32),
     LoginResult(u8, String),
     Quit,
-    //Screen(MapScreen),
+    Screen(MapScreen),
     Shout(String),
     TextOutput(u8, String),
     Tile(i16, String),

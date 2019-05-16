@@ -2,8 +2,8 @@ use std::collections::{HashMap, VecDeque};
 use tokio::prelude::*;
 use uuid::Uuid;
 
-use game::command::{Command, CommandParser, CommandError};
 use game::camera::Camera;
+use game::command::{Command, CommandError, CommandParser};
 use game::map::Map;
 use game::Point;
 
@@ -21,7 +21,7 @@ pub struct Pc {
 }
 
 impl Pc {
-    pub fn new (id: Uuid, name: &str, camera: Camera) -> Self {
+    pub fn new(id: Uuid, name: &str, camera: Camera) -> Self {
         Pc {
             id: id,
             camera: camera,
@@ -37,15 +37,9 @@ impl Pc {
         let parsed = command.parse()?;
         match parsed {
             // Do pathfinding as movement queue
-            Command::Shout(message) => {
-                Ok(())
-            },
-            Command::MoveTarget(point) => {
-                Ok(())
-            },
-            _ => {
-                Err(CommandError::new("Not implemented"))
-            }
+            Command::Shout(message) => Ok(()),
+            Command::MoveTarget(point) => Ok(()),
+            _ => Err(CommandError::new("Not implemented")),
         }
     }
 
@@ -55,9 +49,7 @@ impl Pc {
 }
 
 impl Character for Pc {
-    fn build_auto_queue(&mut self, map: &Map) {
-
-    }
+    fn build_auto_queue(&mut self, map: &Map) {}
 }
 
 // This delegate contains how to respond to all the different actions that can be taken
@@ -69,23 +61,27 @@ pub struct NpcDelegate {
 impl NpcDelegate {
     fn new(when_activated: Option<fn(&Uuid) -> Command>) -> Self {
         NpcDelegate {
-            when_activated: when_activated
+            when_activated: when_activated,
         }
     }
 }
 
 pub struct Npc {
-    name: Option<String>,
-    path: Option<String>,
+    pub name: Option<String>,
+    pub path: Option<String>,
     pub location: Point,
     pub delegate: Option<NpcDelegate>,
     commands: VecDeque<Command>,
     pub attributes: HashMap<String, String>,
-
 }
 
 impl Npc {
-    fn new(name: Option<String>, location: &Point, path: Option<String>, delegate: Option<NpcDelegate>) -> Self {
+    fn new(
+        name: Option<String>,
+        location: &Point,
+        path: Option<String>,
+        delegate: Option<NpcDelegate>,
+    ) -> Self {
         Npc {
             path: path,
             commands: VecDeque::new(),
@@ -103,7 +99,5 @@ impl Npc {
 }
 
 impl Character for Npc {
-    fn build_auto_queue(&mut self, map: &Map) {
-
-    }
+    fn build_auto_queue(&mut self, map: &Map) {}
 }

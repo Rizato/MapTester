@@ -13,19 +13,18 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.*/
 
-
 use bytes::BytesMut;
-use conn::{Msg, Login};
-use flate2::Compression;
+use conn::{Login, Msg};
 use flate2::write::ZlibEncoder;
-use std::collections::HashMap;
+use flate2::Compression;
 use std;
-use std::str;
-use tokio::prelude::*;
-use tokio::net::TcpStream;
-use tokio::io;
-use time;
+use std::collections::HashMap;
 use std::fs::File;
+use std::str;
+use time;
+use tokio::io;
+use tokio::net::TcpStream;
+use tokio::prelude::*;
 
 //use game::gamemap::MapScreen;
 
@@ -35,7 +34,7 @@ use std::fs::File;
 /// It also covers things like writing larger than 8 bit numbers to a u8 vector. (with varying
 /// endiannes, as described in the API)
 pub trait Api {
-    fn write_header(vec: &mut Vec<u8>, code:u8, lenth:i32);
+    fn write_header(vec: &mut Vec<u8>, code: u8, lenth: i32);
     fn write_string(vec: &mut Vec<u8>, string: &str);
     fn write_i16(vec: &mut Vec<u8>, short: i16);
     fn write_i16_reversed(vec: &mut Vec<u8>, short: i16);
@@ -52,9 +51,19 @@ pub trait Api {
     //fn write_zipped_screen(&mut self, screen: MapScreen);
     fn write_stat_name(&mut self, name: &str);
     fn write_stat(&mut self, stat: Stat, gold: i32);
-    fn write_stat_level(&mut self,level: u8, xp: i32);
-    fn write_stat_all(&mut self, hp: i32, mhp: i32, sp: i32, msp: i32, level: i32, xp: i32, nxp:
-                      i32, food: i32, mfood: i32);
+    fn write_stat_level(&mut self, level: u8, xp: i32);
+    fn write_stat_all(
+        &mut self,
+        hp: i32,
+        mhp: i32,
+        sp: i32,
+        msp: i32,
+        level: i32,
+        xp: i32,
+        nxp: i32,
+        food: i32,
+        mfood: i32,
+    );
     fn write_ground_add(&mut self, name: &str, commands: &str, tile: i16, index: i16, offsets: i16);
     fn write_inv_add(&mut self, name: &str, commands: &str, tile: i16, index: i16, offsets: i16);
     fn zip_data(data: Vec<u8>) -> Vec<u8>;
@@ -101,20 +110,34 @@ impl Codec {
 
         let buf = &mut self.input_buffer;
         if number > 17 {
-            let first_value = buf.split_to(4)[..].iter().fold(0i32, |sum, x| sum  << 8 | *x as i32);
+            let first_value = buf.split_to(4)[..]
+                .iter()
+                .fold(0i32, |sum, x| sum << 8 | *x as i32);
             if first_value == 1 {
-                let height = buf.split_to(2)[..].iter().fold(0u32, |sum, x| sum << 8 | *x as u32);
-                let width = buf.split_to(2)[..].iter().fold(0u32, |sum, x| sum << 8 | *x as u32);
-                let name_len = buf.split_to(2)[..].iter().fold(0usize, |sum, x| sum << 8 | *x as usize);
+                let height = buf.split_to(2)[..]
+                    .iter()
+                    .fold(0u32, |sum, x| sum << 8 | *x as u32);
+                let width = buf.split_to(2)[..]
+                    .iter()
+                    .fold(0u32, |sum, x| sum << 8 | *x as u32);
+                let name_len = buf.split_to(2)[..]
+                    .iter()
+                    .fold(0usize, |sum, x| sum << 8 | *x as usize);
                 let name_utf = buf.split_to(name_len);
                 let name = std::str::from_utf8(&name_utf[..]).unwrap();
-                let pw_len= buf.split_to(2)[..].iter().fold(0usize, |sum, x| sum << 8 | *x as usize);
+                let pw_len = buf.split_to(2)[..]
+                    .iter()
+                    .fold(0usize, |sum, x| sum << 8 | *x as usize);
                 let pw_utf = buf.split_to(pw_len);
                 let pw = std::str::from_utf8(&pw_utf[..]).unwrap();
-                let version_len  = buf.split_to(2)[..].iter().fold(0usize, |sum, x| sum << 8 | *x as usize);
+                let version_len = buf.split_to(2)[..]
+                    .iter()
+                    .fold(0usize, |sum, x| sum << 8 | *x as usize);
                 let version_utf = buf.split_to(version_len);
                 let version = std::str::from_utf8(&version_utf[..]).unwrap();
-                return Ok(Async::Ready(Some(Login::new(height, width, name, pw, version))));
+                return Ok(Async::Ready(Some(Login::new(
+                    height, width, name, pw, version,
+                ))));
             }
         }
         Ok(Async::NotReady)
@@ -133,10 +156,13 @@ impl Codec {
         loop {
             if buf.len() >= 3 {
                 //Must be over 3 in length.
-                let length = buf.split_to(2).iter().fold(0usize,| total, x | total  << 8 | *x as usize);
+                let length = buf
+                    .split_to(2)
+                    .iter()
+                    .fold(0usize, |total, x| total << 8 | *x as usize);
                 if buf.len() >= 2 + length {
-                    let command_utf =  buf.split_to(length);
-                    let command =  str::from_utf8(&command_utf[..]).unwrap();
+                    let command_utf = buf.split_to(length);
+                    let command = str::from_utf8(&command_utf[..]).unwrap();
                     self.input.push(Msg::Command(addr, command.to_owned()));
                 } else {
                     return Ok(Async::NotReady);
@@ -146,7 +172,6 @@ impl Codec {
             }
         }
     }
-
 
     pub fn flush_write_buffer(&mut self) -> Poll<(), io::Error> {
         while !self.output_buffer.is_empty() {
@@ -163,51 +188,50 @@ impl Codec {
             Msg::TextOutput(result, message) => {
                 // Write message
                 self.write_text_out(result, &message);
-            },
+            }
             //Msg::Screen(screen) => {
             //    //Write screen
             //    self.write_zipped_screen(screen);
             //},
             Msg::Shout(msg) => {
-                self.write_text_out(4,&msg);
-            },
+                self.write_text_out(4, &msg);
+            }
             Msg::LoginResult(result, message) => {
                 self.write_conn_result(result, &message);
-            },
+            }
             Msg::Name(name) => {
                 self.write_stat_name(&name);
-            },
+            }
             Msg::Quit => {
                 self.write_quit();
-            },
+            }
             Msg::Image(img) => {
                 self.write_image(&img);
-            },
+            }
             Msg::Hp(amount) => {
                 self.write_stat(Stat::Hp, amount);
-            },
+            }
             Msg::Mana(amount) => {
                 self.write_stat(Stat::Sp, amount);
-            },
+            }
             Msg::Gold(amount) => {
                 self.write_stat(Stat::Gold, amount);
-            },
+            }
             Msg::Xp(amount) => {
                 self.write_stat(Stat::Xp, amount);
-            },
+            }
             Msg::Tile(tile, path) => {
                 self.write_tile(tile, &path);
-            },
+            }
             Msg::TileMapping(map) => {
                 self.write_tile_mappings(map);
-            },
+            }
             _ => {
                 panic!("Oh no!");
             }
         }
     }
 }
-
 
 impl Stream for Codec {
     type Item = Msg;
@@ -222,8 +246,8 @@ impl Stream for Codec {
                 Async::Ready(Some(login)) => self.input.push(Msg::Login(addr, login)),
                 Async::Ready(None) => {
                     return Ok(Async::Ready(None));
-                },
-                _ => {},
+                }
+                _ => {}
             }
             self.logged_in = true;
         }
@@ -246,18 +270,18 @@ impl Stream for Codec {
 ///Just implements the Api trait. This implementation is created from reading the web page that was
 ///posted with all this information.
 impl Api for Codec {
-    fn write_header(vec: &mut Vec<u8>, code:u8, length:i32) {
+    fn write_header(vec: &mut Vec<u8>, code: u8, length: i32) {
         vec.push(code);
         let high = length & 0xff0000;
         vec.push((high >> 16) as u8);
         let mid = length & 0xff00;
-        vec.push((mid >> 8)  as u8);
+        vec.push((mid >> 8) as u8);
         let low = length & 0xff;
         vec.push(low as u8);
     }
 
     fn write_string(vec: &mut Vec<u8>, string: &str) {
-        let high= string.len() & 0xff00;
+        let high = string.len() & 0xff00;
         vec.push((high >> 8) as u8);
         let low = string.len() & 0xff;
         vec.push(low as u8);
@@ -265,7 +289,7 @@ impl Api for Codec {
     }
 
     fn write_i16(vec: &mut Vec<u8>, short: i16) {
-        let high= short as u16 & 0xff00;
+        let high = short as u16 & 0xff00;
         vec.push((high >> 8) as u8);
         let low = short & 0xff;
         vec.push(low as u8);
@@ -274,12 +298,12 @@ impl Api for Codec {
     fn write_i16_reversed(vec: &mut Vec<u8>, short: i16) {
         let low = short & 0xff;
         vec.push(low as u8);
-        let high= short as u16 & 0xff00;
+        let high = short as u16 & 0xff00;
         vec.push((high >> 8) as u8);
     }
 
     fn write_i32(vec: &mut Vec<u8>, val: i32) {
-        let high = val as u32  & 0xff000000;
+        let high = val as u32 & 0xff000000;
         vec.push((high >> 24) as u8);
         let mid_high = val & 0xff0000;
         vec.push((mid_high >> 16) as u8);
@@ -296,7 +320,7 @@ impl Api for Codec {
         vec.push((mid_low >> 8) as u8);
         let mid_high = val & 0xff0000;
         vec.push((mid_high >> 16) as u8);
-        let high = val as u32  & 0xff000000;
+        let high = val as u32 & 0xff000000;
         vec.push((high >> 24) as u8);
     }
 
@@ -305,11 +329,11 @@ impl Api for Codec {
         vec.push((very_high >> 56) as u8);
         let very_mid_high = val & 0xff000000000000;
         vec.push((very_mid_high >> 48) as u8);
-        let very_mid_low = val &    0xff0000000000;
+        let very_mid_low = val & 0xff0000000000;
         vec.push((very_mid_low >> 40) as u8);
-        let very_low = val &          0xff00000000;
-        vec.push((very_low >> 32 )as u8);
-        let high = val                & 0xff000000;
+        let very_low = val & 0xff00000000;
+        vec.push((very_low >> 32) as u8);
+        let high = val & 0xff000000;
         vec.push((high >> 24) as u8);
         let mid_high = val & 0xff0000;
         vec.push((mid_high >> 16) as u8);
@@ -360,8 +384,8 @@ impl Api for Codec {
         //Read map files. Write out entire output.
         let mut uncompressed: Vec<u8> = vec![];
         for (k, v) in mappings.iter() {
-           Codec::write_i16(&mut uncompressed, v.clone());
-           Codec::write_string(&mut uncompressed, k.trim());
+            Codec::write_i16(&mut uncompressed, v.clone());
+            Codec::write_string(&mut uncompressed, k.trim());
         }
         let u_len = uncompressed.len();
         let mut compressed = Codec::zip_data(uncompressed);
@@ -379,8 +403,8 @@ impl Api for Codec {
     }
 
     fn write_image(&mut self, image: &str) {
-        let mut data:  Vec<u8> = vec![];
-        match File::open(format!("images/{}.gif",image)) {
+        let mut data: Vec<u8> = vec![];
+        match File::open(format!("images/{}.gif", image)) {
             Ok(mut file) => {
                 let mut buf = vec![];
                 match file.read_to_end(&mut buf) {
@@ -392,12 +416,11 @@ impl Api for Codec {
                         Codec::write_timestamp(&mut data);
                         self.output_buffer.extend_from_slice(&data[..]);
                         println!("Wrote tile");
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
-
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
@@ -415,7 +438,7 @@ impl Api for Codec {
         //println!("Text Out");
         let mut m: Vec<u8> = vec![];
         //text out byte
-        Codec::write_header(&mut m, 11, (message.len()+3) as i32);
+        Codec::write_header(&mut m, 11, (message.len() + 3) as i32);
         m.push(style);
         Codec::write_string(&mut m, message);
         self.output_buffer.extend_from_slice(&m[..]);
@@ -465,7 +488,6 @@ impl Api for Codec {
         self.output_buffer.extend_from_slice(&n[..]);
     }
 
-
     fn write_stat(&mut self, stat: Stat, amount: i32) {
         //println!("Write gold");
         let mut n = vec![];
@@ -489,11 +511,21 @@ impl Api for Codec {
         self.output_buffer.extend_from_slice(&n[..]);
     }
 
-    fn write_stat_all(&mut self, hp: i32, mhp: i32, sp: i32, msp: i32, level: i32, xp: i32, nxp:
-                      i32, food: i32, mfood: i32) {
+    fn write_stat_all(
+        &mut self,
+        hp: i32,
+        mhp: i32,
+        sp: i32,
+        msp: i32,
+        level: i32,
+        xp: i32,
+        nxp: i32,
+        food: i32,
+        mfood: i32,
+    ) {
         //println!("WRITE STATS");
         let mut n = vec![];
-        Codec::write_header(&mut n, 120, 36 );
+        Codec::write_header(&mut n, 120, 36);
         Codec::write_i32(&mut n, hp);
         Codec::write_i32(&mut n, mhp);
         Codec::write_i32(&mut n, sp);
@@ -506,7 +538,14 @@ impl Api for Codec {
         self.output_buffer.extend_from_slice(&n[..]);
     }
 
-    fn write_ground_add(&mut self, name: &str, commands: &str, tile: i16, index: i16, offsets: i16) {
+    fn write_ground_add(
+        &mut self,
+        name: &str,
+        commands: &str,
+        tile: i16,
+        index: i16,
+        offsets: i16,
+    ) {
         //println!("Write ground add {}", name);
         let mut n = vec![];
         Codec::write_header(&mut n, 80, (10 + name.len() + commands.len()) as i32);
@@ -530,7 +569,7 @@ impl Api for Codec {
         self.output_buffer.extend_from_slice(&n[..]);
     }
 
-    fn zip_data(data: Vec<u8> ) -> Vec<u8> {
+    fn zip_data(data: Vec<u8>) -> Vec<u8> {
         //println!("ZIP");
         let d = data.len();
         let mut encoder = ZlibEncoder::new(Vec::new(), Compression::Default);

@@ -13,16 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.*/
 
-
-use SharedState;
 use conn::api::Codec;
-use conn::{Rx, Msg};
+use conn::{Msg, Rx};
 use futures::sync::mpsc;
 use futures::Future;
-use std::sync::{Arc, Mutex};
 use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
 use tokio::io;
 use tokio::prelude::*;
+use SharedState;
 
 /// This module defines the player struct.
 ///
@@ -40,7 +39,11 @@ impl Player {
     pub fn new(game: Arc<Mutex<SharedState>>, codec: Codec) -> Self {
         let (tx, rx) = mpsc::unbounded();
         let addr = codec.socket.peer_addr().unwrap();
-        game.lock().unwrap().game.unbounded_send(Msg::Connect(addr, tx)).unwrap();
+        game.lock()
+            .unwrap()
+            .game
+            .unbounded_send(Msg::Connect(addr, tx))
+            .unwrap();
 
         Player {
             game,
@@ -61,12 +64,12 @@ impl Future for Player {
         // buffer messages
         for _x in 0..MESSAGES_PER_TICK {
             match self.rx.poll().unwrap() {
-               Async::Ready(Some(msg)) => {
-                  self.codec.buffer(msg);
-               },
-               _ => {
-                   break;
-               }
+                Async::Ready(Some(msg)) => {
+                    self.codec.buffer(msg);
+                }
+                _ => {
+                    break;
+                }
             }
         }
 
@@ -83,7 +86,12 @@ impl Future for Player {
             } else {
                 // remove client from game
 
-                self.game.lock().unwrap().game.unbounded_send(Msg::Timeout(self.addr.clone())).unwrap();
+                self.game
+                    .lock()
+                    .unwrap()
+                    .game
+                    .unbounded_send(Msg::Timeout(self.addr.clone()))
+                    .unwrap();
                 return Ok(Async::Ready(()));
             }
         }

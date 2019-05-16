@@ -13,16 +13,15 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-use game::characters::{Character, Pc, Npc};
+use game::characters::{Character, Npc, Pc};
 use game::command::{Command, Direction};
 use game::{Game, Point};
 
-use std::sync::Arc;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
-use std::collections::HashMap;
+use std::sync::Arc;
 use uuid::Uuid;
-
 
 use xml::reader::{EventReader, XmlEvent};
 
@@ -36,7 +35,7 @@ pub struct Map {
     pub width: u32,
     pub height: u32,
     pub modifiers: HashMap<String, String>, // Things like lighting, nopk, start, oob terrain, etc.
-    pub tiles: Vec<MapTile>, // A vector a tiles
+    pub tiles: Vec<MapTile>,                // A vector a tiles
     pub players: HashMap<Uuid, Point>,
     pub objects: Vec<Npc>, // (Teleporters are now objects) A vec of objects on the map. Each is a character so it can be controlle
     pub queue: Vec<Command>, // Queue of player commands to execute
@@ -57,14 +56,24 @@ impl Map {
     }
 
     pub fn add_player(&mut self, uuid: &Uuid) {
-        let x = self.modifiers.get("start_x").unwrap().parse::<u32>().unwrap();
-        let y = self.modifiers.get("start_y").unwrap().parse::<u32>().unwrap();
+        let x = self
+            .modifiers
+            .get("start_x")
+            .unwrap()
+            .parse::<u32>()
+            .unwrap();
+        let y = self
+            .modifiers
+            .get("start_y")
+            .unwrap()
+            .parse::<u32>()
+            .unwrap();
         self.players.insert(uuid.clone(), Point::new(&x, &y));
     }
 
     /// Returns the x,y value of a token
     pub fn find_player(&mut self, uuid: &Uuid) -> Option<Point> {
-        let ref objects= self.objects;
+        let ref objects = self.objects;
         let len = objects.len();
         if let Some(location) = self.players.get(uuid) {
             return Some(location.clone());
@@ -90,8 +99,8 @@ impl Map {
                 Command::MoveStep(ref uuid, ref point, ref direction) => {
                     self.players.insert(uuid.clone(), point.clone());
                     // How do I handle the direction?
-                },
-                _ => {},
+                }
+                _ => {}
             };
         }
 
@@ -129,7 +138,7 @@ pub struct MapTile {
 
 impl MapTile {
     fn new(tile: String) -> MapTile {
-        MapTile{
+        MapTile {
             tile: tile,
             blocked: false,
         }
