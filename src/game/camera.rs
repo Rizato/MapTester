@@ -1,6 +1,7 @@
 use game::characters::Pc;
 use game::map::Map;
 use game::Point;
+use std::collections::HashMap;
 
 pub struct Camera {
     width: u32,
@@ -38,8 +39,9 @@ pub struct ScreenObject {
 impl ScreenObject {
     ///Creates a new screen object with the given tile, x and y
     fn new(tile: String, x: u32, y: u32) -> ScreenObject {
+        let conversions = MapScreen::conversion_map();
         ScreenObject {
-            tile: MapScreen::convert_terrain(tile),
+            tile: MapScreen::convert_terrain(conversions, tile),
             x: x,
             y: y,
         }
@@ -55,8 +57,9 @@ pub struct ScreenTerrain {
 impl ScreenTerrain {
     ///Creates a new tile struct
     fn new(tile: String) -> ScreenTerrain {
+        let conversions = MapScreen::conversion_map();
         ScreenTerrain {
-            tile: MapScreen::convert_terrain(tile),
+            tile: MapScreen::convert_terrain(conversions, tile),
         }
     }
 
@@ -91,6 +94,7 @@ impl ScreenTerrain {
 pub struct MapScreen {
     pub width: u32,
     pub height: u32,
+    pub conversions: HashMap<String, String>,
     //15x15 vector.
     pub terrain: Vec<ScreenTerrain>,
     //User art at 7,7
@@ -112,11 +116,7 @@ impl MapScreen {
         if map.width > center.x && map.height > center.y {
             for i in 0..(size_x + 2) {
                 for j in 0..(size_y + 2) {
-                    if startx + i >= 0
-                        && startx + (i) < (map.width)
-                        && starty + (j) >= 0
-                        && starty + (j) < (map.height)
-                    {
+                    if startx + (i) < (map.width) && starty + (j) < (map.height) {
                         //get the tile from the map
                         let index = ((starty + j) * (map.width) + (startx + i)) as usize;
                         let ref tiles = map.tiles;
@@ -157,22 +157,27 @@ impl MapScreen {
         MapScreen {
             width: size_x + 2,
             height: size_y + 2,
+            conversions: MapScreen::conversion_map(),
             terrain: ter,
             objects: obj,
         }
     }
 
+    fn conversion_map() -> HashMap<String, String> {
+        let mut conversion = HashMap::new();
+        conversion.insert("scenery/sign1".to_string(), "indoor/sign1".to_string());
+        conversion.insert("scenery/caveE".to_string(), "scenery/cave2".to_string());
+        conversion.insert("terrain/dark_earth".to_string(), "terrain/mud".to_string());
+
+        return conversion;
+    }
+
     ///These are the terrain tiles I have found where the terrain path from xml
     ///did not match the image path.
-    fn convert_terrain(tile: String) -> String {
-        if tile == "scenery/sign1" {
-            "indoor/sign1".to_string()
-        } else if tile == "scenery/caveE" {
-            "scenery/cave2".to_string()
-        } else if tile == "terrain/dark_earth" {
-            "terrain/mud".to_string()
-        } else {
-            tile
-        }
+    fn convert_terrain(conversion_map: HashMap<String, String>, tile: String) -> String {
+        return match conversion_map.get(&tile) {
+            Some(converted) => converted.to_string(),
+            None => tile,
+        };
     }
 }

@@ -24,12 +24,14 @@ extern crate glob;
 extern crate time;
 extern crate uuid;
 extern crate xml;
+#[macro_use]
+extern crate log;
 
 use conn::api::Codec;
 use conn::player::Player;
-use conn::{Rx, Tx};
+use conn::Tx;
 use futures::sync::mpsc;
-use game::Game;
+use game::{Game, GameMessageParser};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -42,17 +44,28 @@ use tokio::timer::Interval;
 /// This is the source for a MOBA server that is compatible with a preexisting game client.
 
 fn main() -> Result<(), io::Error> {
-    println!("starting");
+    info!("starting");
 
     let (tx, rx) = mpsc::unbounded();
-    let mut game = Game::new(rx);
+    let mut game = Arc::new(Mutex::new(Game::new(rx)));
     let gameloop = Interval::new(Instant::now(), Duration::from_millis(15))
-        .for_each(move |_| {
-            game.poll().unwrap();
-            Ok(())
+        .map_err(move |_| {
+            error!("Error in interval");
         })
-        .map_err(|e| {
-            println!("Gameloop Error: {:?}", e);
+        .for_each(move |_| {
+            let game = game.clone();
+            const COMMANDS_PER_TICK: u64 = 50;
+            GameMessageParser::new(&game.clone(), COMMANDS_PER_TICK).and_then(move |_| {
+                let mut game = game.lock();
+
+                match game {
+                    Ok(ref mut g) => g.tick(),
+                    Err(e) => {
+                        error!("error getting game lock");
+                        Err(())
+                    }
+                }
+            })
         });
 
     let shared = Arc::new(Mutex::new(SharedState::new(tx)));
@@ -66,13 +79,13 @@ fn main() -> Result<(), io::Error> {
             let codec = Codec::new(socket);
 
             let player = Player::new(shared.clone(), codec).map_err(|e| {
-                println!("Player Error: {:?}", e);
+                error!("Player Error: {:?}", e);
             });
             tokio::spawn(player);
             Ok(())
         })
         .map_err(|e| {
-            println!("Conn Error: {:?}", e);
+            error!("Conn Error: {:?}", e);
         });
 
     // Start the gameloop in one backend, the main thing in a blocking runtime
