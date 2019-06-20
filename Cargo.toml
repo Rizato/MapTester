@@ -1,19 +1,22 @@
 [package]
 
-name = "moba"
-version = "0.0.1"
+name = "dungeon_crawler"
+version = "0.1.0"
 authors = [ "Robert Lathrop <rizatodev@gmail.com>" ]
 
 [dependencies]
-mio = "0.4"
 flate2 = "0.2"
 byteorder = "0.4.2"
-bytes = "0.3.0"
 time = "0.1"
 slab   = "0.1.0"
 xml-rs = "0.3"
 glob = "0.2.11"
+tokio = "0.1"
+bytes = "0.4.5"
+futures = "0.1.21"
+uuid = { version = "0.6", features = ["v4"] }
+log = "0.4.6"
 
 [[bin]]
 
-name = "moba"
+name = "dungeon_crawler"

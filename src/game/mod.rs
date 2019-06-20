@@ -13,52 +13,169 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.*/
 
-/// This module holds the game object. It has the Game struct
-
-extern crate mio;
-
-pub mod gameloop;
-pub mod gamemap;
+pub mod camera;
 pub mod characters;
-
+pub mod command;
+/// This module holds the game object. It has the Game struct
+pub mod map;
 
 use glob::glob;
-use std::io::prelude::*;
 use std::collections::HashMap;
-use std::collections::hash_map::Entry::{Vacant, Occupied};
-use std::sync::Arc;
-use std::cell::RefCell;
 use std::fs::File;
+use std::io::prelude::*;
 use std::io::BufReader;
-use std::sync::mpsc::Sender;
-use std::sync::Mutex;
+use std::io::Error;
+use std::net::SocketAddr;
+use std::sync::{Arc, Mutex};
+use tokio::prelude::*;
+use uuid::Uuid;
 
-use game::gameloop::GameLoop;
-use conn::server::Msg;
+use self::camera::Camera;
+use self::characters::{Character, Npc, Pc};
+use self::command::Command;
+use self::map::Map;
+use conn::Msg;
+use conn::{Rx, Tx};
 
-
-///This just has a hashmap of gameloops, and maps of game loops, and also holds all of the tile
-///mappings
 pub struct Game {
-    game_loops: Mutex<HashMap<String, Arc<RefCell<GameLoop>>>>,
-    pub mappings: HashMap<String, i16>,
-    pub send: Sender<Msg>,
+    rx: Rx,
+    connections: HashMap<SocketAddr, Connection>,
+    pcs: HashMap<Uuid, Pc>,
+    maps: HashMap<String, Map>,
+    mappings: HashMap<String, i16>,
+    queue: Vec<Msg>,
 }
 
+// This should implement future, because it is not some function used by a future, it is actually the task to be performed
+// Whereas poll_login, is a task the future waits on.
 impl Game {
-    ///Creates a new game struct. Initilizes a new hashmap, and reads the tile map file.
-    pub fn new(send: Sender<Msg>) -> Game {
+    pub fn new(rx: Rx) -> Self {
+        let mappings = Game::create_mappings();
         Game {
-            game_loops: Mutex::new(HashMap::new()),
-            mappings: Game::create_mappings(),
-            send: send,
+            rx: rx,
+            connections: HashMap::new(),
+            pcs: HashMap::new(),
+            maps: HashMap::new(),
+            mappings: mappings,
+            queue: Vec::new(),
         }
     }
 
-    ///Reads the file with the paths for all images. Assigns tiles by count.
-    pub fn create_mappings() -> HashMap<String, i16> {
-        let mut m: HashMap<String,i16> = HashMap::new();  
-        let tile_file = File::open("file_full").unwrap(); 
+    pub fn tick(&mut self) -> Result<(), ()> {
+        // Read commands,
+        for msg in self.queue.iter() {
+            match msg {
+                Msg::Login(addr, login) => {
+                    let camera = Camera::new(&login.width, &login.height);
+                    if let Some(ref connection) = self.connections.get(&addr) {
+                        let tx = &connection.tx;
+                        // Check if user is logged in w/ a valid conn. -> Fail.
+                        let mut exists = false;
+                        for (address, existing) in self.connections.iter() {
+                            if let Some(ref pc) = self.pcs.get(&existing.id) {
+                                if pc.name == login.name {
+                                    tx.unbounded_send(Msg::LoginResult(
+                                        3,
+                                        "User already logged in".to_string(),
+                                    ))
+                                    .unwrap();
+                                    exists = true;
+                                }
+                            }
+                        }
+                        // I would have liked a way to exit from the match, instead of this.
+                        if !exists {
+                            // Check if user is logged in, w/o a valid conn -> Good & takeover pc id
+                            for (id, pc) in self.pcs.iter_mut() {
+                                if pc.name == login.name {
+                                    pc.id = connection.id;
+                                    tx.unbounded_send(Msg::LoginResult(4, String::new()))
+                                        .unwrap();
+                                    exists = true;
+                                }
+                            }
+
+                            if !exists {
+                                // Create new player
+                                let player = Pc::new(connection.id.clone(), &login.name, camera);
+                                self.pcs.insert(connection.id, player);
+                                // TODO Add to lobby
+                            }
+                            tx.unbounded_send(Msg::TileMapping(self.mappings.clone()));
+                        }
+                    }
+                }
+                Msg::Timeout(addr) => {
+                    self.connections.remove(&addr);
+                }
+                Msg::Command(addr, command) => match self.connections.get(&addr) {
+                    Some(ref conn) => {
+                        let ref id = &conn.id;
+                        if let Some(ref pc) = self.pcs.get(id) {
+                            pc.add_command(&command);
+                        }
+                    }
+                    None => {
+                        error!("Address {:?} does not have an open connection", addr);
+                    }
+                },
+                Msg::Connect(addr, tx) => {
+                    let id = Uuid::new_v4();
+                    let connection = Connection::new(tx.clone(), id);
+                    self.connections.insert(*addr, connection);
+                }
+                _ => {
+                    error!("This command shouldn't be sent to the game");
+                }
+            }
+        }
+
+        for (name, map) in self.maps.iter_mut() {
+            let players = &map.players.clone();
+            for (id, position) in players {
+                if let Some(ref mut player) = self.pcs.get_mut(&id) {
+                    let mut commands: Vec<Command> = Vec::new();
+                    if let Some(movement) = player.next_movement(&map, &position) {
+                        commands.push(movement);
+                    }
+
+                    for command in commands {
+                        match command {
+                            Command::Whisper(target, message) => {}
+                            Command::Shout(message) => {
+                                for (_, conn) in self.connections.iter() {
+                                    if conn.id != *id {
+                                        conn.tx
+                                            .unbounded_send(Msg::Shout(message.clone()))
+                                            .unwrap();
+                                    }
+                                }
+                            }
+                            c => {
+                                map.queue(c);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // This gives back commands that require action external to the map (Teleportations & Respawns)
+            // TODO Do this as asyncio gather to speed up the process
+            let reactions = map.execute();
+            for reaction in reactions {
+                match reaction {
+                    Command::Respawn(Uuid) => {}
+                    Command::Teleport(target, map, ask_map, suggested_spot) => {}
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn create_mappings() -> HashMap<String, i16> {
+        let mut m: HashMap<String, i16> = HashMap::new();
+        let tile_file = File::open("file_full").unwrap();
         let mut reader = BufReader::new(tile_file);
         let mut line: String = String::new();
         let mut count = 0;
@@ -70,38 +187,99 @@ impl Game {
         for entry in glob("images/**/*.gif").unwrap() {
             match entry {
                 Ok(img) => {
-                    m.insert(img.file_stem().unwrap().to_str().unwrap().to_string(), count);
+                    m.insert(
+                        img.file_stem().unwrap().to_str().unwrap().to_string(),
+                        count,
+                    );
                     count = count + 1;
-                    println!("{} {}", img.display(), count);
-                },
-                _ => {},
+                    info!("{} {}", img.display(), count);
+                }
+                _ => {}
             }
         }
-        m
+        return m;
+    }
+}
+
+pub struct GameMessageParser {
+    game: Arc<Mutex<Game>>,
+    max_messages: u64,
+}
+
+impl GameMessageParser {
+    pub fn new(game: &Arc<Mutex<Game>>, max_messages: u64) -> Self {
+        GameMessageParser {
+            game: game.clone(),
+            max_messages,
+        }
+    }
+}
+
+impl Future for GameMessageParser {
+    type Item = ();
+    type Error = ();
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        let mut game = self.game.lock();
+        if let Ok(ref mut game) = self.game.lock() {
+            for _x in 0..self.max_messages {
+                match game.rx.poll() {
+                    Ok(Async::Ready(Some(msg))) => {
+                        game.queue.push(msg);
+                    }
+                    Ok(Async::Ready(None)) => {}
+                    Ok(Async::NotReady) => {
+                        // Normall, you would just use try_ready! and exit on this.
+                        // In our case, we want to be fast, if it isn't ready
+                        // It will be for the next loop
+                        return Ok(Async::Ready(()));
+                    }
+                    Err(e) => {
+                        return Err(e);
+                    }
+                }
+            }
+            Ok(Async::Ready(()))
+        } else {
+            error!("error getting game lock");
+            Err(())
+        }
+    }
+}
+
+pub struct Connection {
+    id: Uuid,
+    tx: Tx,
+}
+
+impl Connection {
+    fn new(tx: Tx, id: Uuid) -> Self {
+        Connection { tx: tx, id: id }
+    }
+}
+
+#[derive(Clone, Eq, PartialEq)]
+pub struct Point {
+    x: u32,
+    y: u32,
+}
+
+impl Point {
+    fn new(x: &u32, y: &u32) -> Self {
+        Point {
+            x: x.clone(),
+            y: y.clone(),
+        }
     }
 
-    ///Creates a new game loop with the given name, or finds it already in the hashmap.
-    pub fn get_or_create_game_loop(&mut self, map_name: &str) -> Option<Arc<RefCell<GameLoop>>> {
-        println!("{}", map_name);
-        //This can handle all kinds of things. Checks last time user was inside, if too long it recreates. 
-        //Checks the hashmap for the Gameloop. If not there, it creates a new one, adds it and returns it.
-        let mut loops = self.game_loops.lock().unwrap();
-        match loops.entry(map_name.to_string()) {
-            Vacant(blank) => {
-                match GameLoop::new(map_name, self.send.clone()) {
-                    Some(game) => {
-                        let full = Arc::new(RefCell::new(game));
-                        blank.insert(full.clone());
-                        Some(full)
-                    },
-                    None =>{
-                        None
-                    },
-                }
-            },
-            Occupied(map) => {
-                Some(map.get().clone())
-            },
-        }
+    fn from_index(index: &u32, width: &u32) -> Self {
+        let x = index % width;
+        let y = index / width;
+        Point { x: x, y: y }
+    }
+
+    fn to_index(self, width: &u32) -> u32 {
+        // Convert x,y to a single index for a 1d array representing a 2d map
+        self.y * width
     }
 }
